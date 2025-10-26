@@ -12,7 +12,7 @@ pub struct InitBank<'info> {
         bump,
         space = 8,
     )]
-    pub bank_account: UncheckedAccount<'info>,
+    pub bank_account: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
 

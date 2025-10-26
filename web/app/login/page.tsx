@@ -1,6 +1,7 @@
 "use client";
-import { usePrivy } from "@privy-io/react-auth";
+import { Captcha, usePrivy } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
+import { useWallets } from "@privy-io/react-auth/solana";
 
 export default function LoginPage() {
   const {
@@ -21,6 +22,9 @@ export default function LoginPage() {
   }
   console.log(`status`, authenticated);
   console.log(`user`, user);
+
+  const { wallets } = useWallets();
+  console.log(wallets);
   return (
     <div className="h-screen flex bg-white max-w-7xl mx-auto max-h-[1200px]">
       {/* Left Section - Branding */}
@@ -111,6 +115,7 @@ export default function LoginPage() {
           </div>
         </div>
       )}
+      <Captcha />
     </div>
   );
 }

@@ -8,7 +8,7 @@ use anchor_lang::prelude::*;
 pub use constants::*;
 pub use instructions::*;
 
-declare_id!("3ByXTivDiSiLso3RDLo1FLW3sRXEQXa3zwNUd3YMxvRC");
+declare_id!("4ddavkocvoin1ZTeJcHrgtZHjN3ETEhwPh3jWE26qV7U");
 
 #[program]
 pub mod solball {

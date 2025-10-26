@@ -5,14 +5,14 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-solball = "3ByXTivDiSiLso3RDLo1FLW3sRXEQXa3zwNUd3YMxvRC"
+solball = "4ddavkocvoin1ZTeJcHrgtZHjN3ETEhwPh3jWE26qV7U"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
-wallet = '~\.config/solana/id.json'
+cluster = "devnet"
+wallet = './my-keypair.json'
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run -p ./tsconfig.json -t 1000000 ./solball/test/test.tests.ts"

@@ -4,6 +4,7 @@ import { useState } from "react";
 import CreateLobbyModal from "./create-lobby-modal";
 import GameCard from "./game-card";
 import ChatSidebar from "./chat-sidebar";
+import ProfileTab from "./profile-menu";
 
 export default function MainTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,7 +101,7 @@ export default function MainTab() {
           </div>
         </div>
       )}
-
+      {activeTab === "profile" && <ProfileTab />}
       {/* Modal */}
       {isModalOpen && (
         <CreateLobbyModal onClose={() => setIsModalOpen(false)} />
