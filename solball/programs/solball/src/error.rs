@@ -4,6 +4,4 @@ use anchor_lang::prelude::*;
 pub enum ErrorCode {
     #[msg("Custom error message")]
     CustomError,
-    #[msg("Account Derivation not valid")]
-    InvalidSubAccount
 }

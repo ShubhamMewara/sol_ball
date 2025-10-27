@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/solball.json`.
  */
 export type Solball = {
-  address: "4ddavkocvoin1ZTeJcHrgtZHjN3ETEhwPh3jWE26qV7U";
+  address: "12N8htoGgDfXqK4Nx9fDYbc8m74SVoWkQXqUp37NaEZ7";
   metadata: {
     name: "solball";
     version: "0.1.0";
@@ -24,6 +24,9 @@ export type Solball = {
         },
         {
           name: "userSubAccount";
+          docs: [
+            "It's safe because we control the derivation and the System Program owns it./// CHECK: This account is initialized as a PDA derived from the signer's pubkey."
+          ];
           writable: true;
           pda: {
             seeds: [
@@ -78,6 +81,9 @@ export type Solball = {
         },
         {
           name: "bankAccount";
+          docs: [
+            "It's safe because we control the derivation and the System Program owns it./// CHECK: This account is initialized as a PDA derived from the signer's pubkey."
+          ];
           writable: true;
           pda: {
             seeds: [
@@ -254,11 +260,6 @@ export type Solball = {
       code: 6000;
       name: "customError";
       msg: "Custom error message";
-    },
-    {
-      code: 6001;
-      name: "invalidSubAccount";
-      msg: "Account Derivation not valid";
     }
   ];
   constants: [

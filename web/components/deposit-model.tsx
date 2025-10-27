@@ -6,28 +6,18 @@ import {
   LAMPORTS_PER_SOL,
   PublicKey,
   Transaction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import { useEffect, useRef, useState } from "react";
-import { Program, BN, AnchorProvider, Wallet } from "@coral-xyz/anchor";
+import { Program, BN } from "@coral-xyz/anchor";
 import IDL from "@/compiled/solball.json";
 import { usePrivy } from "@privy-io/react-auth";
 import {
   useSignAndSendTransaction,
   useWallets,
 } from "@privy-io/react-auth/solana";
-import { getTransferSolInstruction } from "@solana-program/system";
-import {
-  address,
-  appendTransactionMessageInstructions,
-  compileTransaction,
-  createNoopSigner,
-  createSolanaRpc,
-  createTransactionMessage,
-  getTransactionEncoder,
-  pipe,
-  setTransactionMessageFeePayer,
-  setTransactionMessageLifetimeUsingBlockhash,
-} from "@solana/kit";
+import { address } from "@solana/kit";
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -62,14 +52,19 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
   if (!isOpen) return null;
 
   const confirmDeposit = async () => {
+    const connection = new Connection(clusterApiUrl("devnet"));
     // replace with hook
     const selectedWallet = wallets[0];
-    console.log(ready);
-    console.log(wallet);
-    console.log(wallets);
 
-    console.log(selectedWallet.address);
-    const connection = new Connection(clusterApiUrl("devnet"));
+    const [user_sub_account] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("user_sub_account"),
+        new PublicKey(selectedWallet.address).toBuffer(),
+      ],
+      new PublicKey(IDL.address)
+    );
+    const balance = await connection.getBalance(user_sub_account);
+    console.log(balance);
     const program: Program<Solball> = new Program(IDL, {
       connection: connection,
       publicKey: new PublicKey(selectedWallet.address!),
@@ -79,47 +74,24 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
       .instruction();
 
     const bx = await connection.getLatestBlockhash();
-    const tx = new Transaction({
-      blockhash: bx.blockhash,
-      lastValidBlockHeight: bx.lastValidBlockHeight,
-      feePayer: new PublicKey(selectedWallet.address),
-    }).add(ix);
-    const dt = await connection.simulateTransaction(tx);
-    console.log(dt);
-    // const web3Instruction = {
-    //   programAddress: address(ix.programId.toBase58()),
-    //   accounts: ix.keys.map((meta) => ({
-    //     address: address(meta.pubkey.toBase58()),
-    //     role: meta.isSigner
-    //       ? meta.isWritable
-    //         ? 2
-    //         : 0 // 2 = signer+writable, 0 = signer only
-    //       : meta.isWritable
-    //       ? 1
-    //       : 3, // 1 = writable, 3 = readonly
-    //   })),
-    //   data: new Uint8Array(ix.data),
-    // };
+    if (!ix.programId) throw new Error("❌ programId missing from instruction");
 
-    // const { getLatestBlockhash } = createSolanaRpc(clusterApiUrl("devnet")); // Replace with your Solana RPC endpoint
-    // const { value: latestBlockhash } = await getLatestBlockhash().send();
+    const msg = new TransactionMessage({
+      payerKey: new PublicKey(selectedWallet.address!),
+      recentBlockhash: bx.blockhash,
+      instructions: [ix],
+    }).compileToV0Message();
 
-    // // Create a transaction using @solana/kit
-    // const transaction = pipe(
-    //   createTransactionMessage({ version: 0 }),
-    //   (tx) =>
-    //     setTransactionMessageFeePayer(address(selectedWallet.address!), tx), // Set the message fee payer
-    //   (tx) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx), // Set recent blockhash
-    //   (tx) => appendTransactionMessageInstructions([web3Instruction], tx), // Add your instructions to the transaction
-    //   (tx) => compileTransaction(tx), // Compile the transaction
-    //   (tx) => new Uint8Array(getTransactionEncoder().encode(tx)) // Finally encode the transaction
-    // );
-    // // Send the transaction
-    // const result = await signAndSendTransaction({
-    //   transaction: transaction,
-    //   wallet: selectedWallet,
-    // });
-    // console.log("Transaction sent with signature:", result.signature);
+    const versionedTx = new VersionedTransaction(msg);
+    // Send the transaction
+    const result = await signAndSendTransaction({
+      transaction: versionedTx.serialize(),
+      wallet: selectedWallet,
+    });
+    console.log(
+      "Transaction sent with signature:",
+      result.signature.toString()
+    );
   };
 
   return (

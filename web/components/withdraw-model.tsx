@@ -1,6 +1,22 @@
 "use client";
 
+import {
+  useSignAndSendTransaction,
+  useWallets,
+} from "@privy-io/react-auth/solana";
+import {
+  clusterApiUrl,
+  Connection,
+  LAMPORTS_PER_SOL,
+  PublicKey,
+  Transaction,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import { useEffect, useRef, useState } from "react";
+import IDL from "../compiled/solball.json";
+import { BN, Program } from "@coral-xyz/anchor";
+import { Solball } from "@/compiled/solball";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -9,8 +25,9 @@ interface WithdrawModalProps {
 
 export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
   const [amount, setAmount] = useState("");
-
+  const { wallets, ready } = useWallets();
   const modalContentRef = useRef(null);
+  const { signAndSendTransaction } = useSignAndSendTransaction();
 
   useEffect(() => {
     const handleClickOutside = (event: any) => {
@@ -32,6 +49,50 @@ export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
     };
   }, [isOpen, onClose]);
   if (!isOpen) return null;
+
+  const withdrawFunds = async () => {
+    const connection = new Connection(clusterApiUrl("devnet"));
+    // replace with hook
+    const selectedWallet = wallets[0];
+
+    const [user_sub_account] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("user_sub_account"),
+        new PublicKey(selectedWallet.address).toBuffer(),
+      ],
+      new PublicKey(IDL.address)
+    );
+    const balance = await connection.getBalance(user_sub_account);
+    console.log(balance);
+    const program: Program<Solball> = new Program(IDL, {
+      connection: connection,
+      publicKey: new PublicKey(selectedWallet.address!),
+    });
+    const ix = await program.methods
+      .withdraw(new BN(Number(amount) * LAMPORTS_PER_SOL))
+      .instruction();
+
+    const bx = await connection.getLatestBlockhash();
+
+    if (!ix.programId) throw new Error("❌ programId missing from instruction");
+
+    const msg = new TransactionMessage({
+      payerKey: new PublicKey(selectedWallet.address!),
+      recentBlockhash: bx.blockhash,
+      instructions: [ix],
+    }).compileToV0Message();
+
+    const versionedTx = new VersionedTransaction(msg);
+    // Send the transaction
+    const result = await signAndSendTransaction({
+      transaction: versionedTx.serialize(),
+      wallet: selectedWallet,
+    });
+    console.log(
+      "Transaction sent with signature:",
+      result.signature.toString()
+    );
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -91,7 +152,10 @@ export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
 
         {/* Buttons */}
         <div className="space-y-3">
-          <button className="w-full bg-[#FF6B6B] text-white py-3 rounded-lg font-bold hover:bg-[#ff5252] transition-all shadow-lg shadow-[#FF6B6B]/30">
+          <button
+            className="w-full bg-[#FF6B6B] text-white py-3 rounded-lg font-bold hover:bg-[#ff5252] transition-all shadow-lg shadow-[#FF6B6B]/30"
+            onClick={withdrawFunds}
+          >
             CONFIRM WITHDRAW
           </button>
           <button

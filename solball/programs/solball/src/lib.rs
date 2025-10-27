@@ -7,11 +7,14 @@ use anchor_lang::prelude::*;
 
 pub use constants::*;
 pub use instructions::*;
+pub use state::*;
 
-declare_id!("4ddavkocvoin1ZTeJcHrgtZHjN3ETEhwPh3jWE26qV7U");
+declare_id!("12N8htoGgDfXqK4Nx9fDYbc8m74SVoWkQXqUp37NaEZ7");
 
 #[program]
 pub mod solball {
+
+
     use super::*;
 
     pub fn deposit(ctx: Context<Deposit>, lamports:u64) -> Result<()> {

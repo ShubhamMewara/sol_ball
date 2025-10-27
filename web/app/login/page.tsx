@@ -11,7 +11,8 @@ export default function LoginPage() {
     login,
     logout,
   } = usePrivy();
-
+  const { wallets } = useWallets();
+  console.log(wallets);
   if (!IsProviderReady) {
     return (
       <div>
@@ -23,8 +24,6 @@ export default function LoginPage() {
   console.log(`status`, authenticated);
   console.log(`user`, user);
 
-  const { wallets } = useWallets();
-  console.log(wallets);
   return (
     <div className="h-screen flex bg-white max-w-7xl mx-auto max-h-[1200px]">
       {/* Left Section - Branding */}

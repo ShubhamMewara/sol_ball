@@ -1,16 +1,16 @@
 use anchor_lang::{prelude::*, system_program::{transfer, Transfer}};
-use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct Deposit<'info> {
     #[account(mut)]
     pub signer:Signer<'info>,
-    /// CHECK:
+  /// CHECK: This account is initialized as a PDA derived from the signer's pubkey.
+/// It's safe because we control the derivation and the System Program owns it./// CHECK: This account is initialized as a PDA derived from the signer's pubkey.
     #[account(
         init_if_needed,
         payer=signer,
         seeds=[b"user_sub_account", signer.key().as_ref()],
-        space=8,
+        space= 0,
         owner =  System::id(),
         bump
     )]
@@ -20,6 +20,7 @@ pub struct Deposit<'info> {
 
 pub fn deposit(ctx: Context<Deposit>, lamports:u64) -> Result<()> {
     let signer_key = ctx.accounts.signer.key();
+
     // deposit the user's fund to user sub account
     let cpi_context  = CpiContext::new(
         ctx.accounts.system_program.to_account_info(),

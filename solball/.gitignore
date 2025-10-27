@@ -1,9 +1,10 @@
 .anchor
 .DS_Store
 target
-**/*.rs.bkp 
+**/*.rs.bk
 node_modules
 test-ledger
 .yarn
+
 
 my-keypair.json

@@ -1,7 +1,6 @@
 use anchor_lang::{prelude::*, system_program::{transfer, Transfer}};
 use anchor_spl::token_2022::TransferChecked;
 
-use crate::{error::ErrorCode, USER_SUB_ACCOUNT};
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
