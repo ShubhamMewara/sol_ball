@@ -1,11 +1,16 @@
 "use client";
 
+import { useState } from "react";
+import CreateLobbyModal from "./create-lobby-modal";
+import LobbyWaitingModal from "./lobby-room";
+
 interface GameCardProps {
-  stake: string;
-  players: string;
+  stake: number;
+  players: number;
   blueTeam: string[];
   redTeam: string[];
   actionType: "spectate" | "join";
+  host: string;
 }
 
 export default function GameCard({
@@ -14,20 +19,25 @@ export default function GameCard({
   blueTeam,
   redTeam,
   actionType,
+  host,
 }: GameCardProps) {
+  const [isLobbyModalOpen, setisLobbyModalOpen] = useState(false);
+
   return (
     <div className="border-b-4 border-[#7ACD54] rounded-lg bg-[#1a1b24] p-6 flex flex-col justify-between min-h-64 shadow-lg shadow-[#7ACD54]/10">
       {/* Header */}
       <div className="mb-6">
         {/* Players and Stake */}
         <div className="flex justify-between items-center mb-6">
-          <span className="text-white font-bold text-lg">{players}</span>
+          <span className="text-white font-bold text-lg">
+            {JSON.stringify(players)}VS{JSON.stringify(players)}
+          </span>
           <div className="text-center flex-1">
             <span
               className="text-white font-bold text-2xl drop-shadow-lg"
               style={{ textShadow: "0 4px 12px rgba(122, 205, 84, 0.3)" }}
             >
-              {stake}
+              {JSON.stringify(stake)}$SOL
             </span>
           </div>
         </div>
@@ -61,6 +71,7 @@ export default function GameCard({
 
       {/* Action Button */}
       <button
+        onClick={() => actionType === "join" && setisLobbyModalOpen(true)}
         className={`w-full py-3 rounded-full font-bold text-lg transition-all shadow-[4px_4px_0_0_#65ab44] ${
           actionType === "spectate"
             ? "bg-[#FFD700] text-white hover:bg-[#FFC700] shadow-[#FFD700]/30"
@@ -69,6 +80,28 @@ export default function GameCard({
       >
         {actionType === "spectate" ? "SPECTATE" : "JOIN"}
       </button>
+      {isLobbyModalOpen && (
+        <LobbyWaitingModal
+          hostName={host}
+          isHost={host == "piyushhsainii"}
+          matchDuration=""
+          maxPlayersPerTeam={3}
+          onClose={() => {
+            setisLobbyModalOpen(false);
+          }}
+          prizePot={stake}
+          existingPlayers={{
+            redTeam: redTeam.map((player) => ({
+              name: player,
+              isCurrentUser: "piyushhsainii" === player,
+            })),
+            blueTeam: blueTeam.map((player) => ({
+              name: player,
+              isCurrentUser: "piyushhsainii" === player,
+            })),
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,38 +1,60 @@
-"use client"
+"use client";
 
-import { useState } from "react"
+import { lobbyData } from "@/lib/data";
+import { Dispatch, SetStateAction, useState } from "react";
+import { toast } from "sonner";
+import LobbyWaitingModal from "./lobby-room";
 
 interface CreateLobbyModalProps {
-  onClose: () => void
+  onClose: () => Dispatch<SetStateAction<boolean>>;
 }
 
-export default function CreateLobbyModal({ onClose }: CreateLobbyModalProps) {
-  const [prizePot, setPrizePot] = useState(0.001)
-  const [players, setPlayers] = useState(6)
-  const [minutes, setMinutes] = useState(3)
+export default function CreateLobbyModal({ onClose }: any) {
+  const [prizePot, setPrizePot] = useState(0.001);
+  const [players, setPlayers] = useState(3);
+  const [minutes, setMinutes] = useState(3);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handlePrizePotChange = (amount: number) => {
-    setPrizePot(Math.max(0, prizePot + amount))
-  }
+    setPrizePot(Math.max(0, prizePot + amount));
+  };
 
   const handlePlayersChange = (amount: number) => {
-    setPlayers(Math.max(2, players + amount))
-  }
+    setPlayers(Math.max(2, players + amount));
+  };
 
   const handleMinutesChange = (amount: number) => {
-    setMinutes(Math.max(1, minutes + amount))
-  }
+    setMinutes(Math.max(1, minutes + amount));
+  };
+
+  const createLobbyHandler = async () => {
+    lobbyData.push({
+      actionType: "join",
+      blueTeam: ["piyushhsainii"],
+      redTeam: [],
+      players: players,
+      stake: prizePot,
+      host: "piyushhsainii",
+    });
+    toast("Lobby Created Successfully!");
+    setIsModalOpen(true);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-[#1a1b24] rounded-lg p-8 w-full max-w-md border-2 border-[#2a2b34]">
         {/* Title */}
-        <h2 className="text-white font-bold text-2xl text-center mb-8">CREATE A LOBBY</h2>
+        <h2 className="text-white font-bold text-2xl text-center mb-8">
+          CREATE A LOBBY
+        </h2>
 
         {/* Prize Pot Section */}
         <div className="mb-8">
           <h3 className="text-[#DDD9C7] font-bold text-sm mb-2">Prize Pot</h3>
-          <div className="text-[#7ACD54] font-bold text-3xl text-center">{prizePot.toFixed(3)} SOL</div>
+          <div className="text-[#7ACD54] font-bold text-3xl text-center">
+            {prizePot.toFixed(3)} SOL
+          </div>
         </div>
 
         {/* Prize Pot Controls */}
@@ -113,17 +135,20 @@ export default function CreateLobbyModal({ onClose }: CreateLobbyModalProps) {
 
         {/* Create Lobby Button */}
         <button
-          onClick={onClose}
           className="w-full bg-[#7ACD54] text-[#14151C] py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all mb-4"
+          onClick={createLobbyHandler}
         >
           CREATE LOBBY
         </button>
 
         {/* Close Button */}
-        <button onClick={onClose} className="w-full text-[#DDD9C7] py-2 font-bold hover:text-white transition-all">
+        <button
+          onClick={() => onClose()}
+          className="w-full text-[#DDD9C7] py-2 font-bold hover:text-white transition-all"
+        >
           Cancel
         </button>
       </div>
     </div>
-  )
+  );
 }
