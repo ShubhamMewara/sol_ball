@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import PrivvyProvider from "./PrivyProvider";
-import AppProvider from "./WalletProvider";
+import PrivvyProvider from "../providers/PrivyProvider";
+import AppProvider from "../providers/WalletProvider";
 import { DynaPuff } from "next/font/google";
 
 const dynapuff = DynaPuff({

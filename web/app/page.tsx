@@ -1,10 +1,12 @@
-import PlanckGame from "@/components/game";
+import MainTab from "@/components/main-tab";
+import React from "react";
 
-export default function Home() {
+const Page = () => {
   return (
-    <div className="">
-      <h1 className="text-3xl font-bold underline">Hello, Next.js!</h1>
-      <PlanckGame />
+    <div className="bg-[#14151C] text-[#DDD9C7]">
+      <MainTab />
     </div>
   );
-}
+};
+
+export default Page;

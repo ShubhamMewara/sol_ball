@@ -17,7 +17,6 @@ import {
   useSignAndSendTransaction,
   useWallets,
 } from "@privy-io/react-auth/solana";
-import { address } from "@solana/kit";
 
 interface DepositModalProps {
   isOpen: boolean;

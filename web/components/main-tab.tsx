@@ -10,12 +10,22 @@ import HomePage from "./home-page";
 import NavTabs from "./NavTabs";
 import { lobbyData } from "@/lib/data";
 import LobbyWaitingModal from "./lobby-room";
+import DepositModal from "./deposit-model";
+import WithdrawModal from "./withdraw-model";
+import { usePrivy } from "@privy-io/react-auth";
+import { Button } from "./ui/button";
 
 type tabs = "main" | "profile" | "leaderboard" | "home";
 
 export default function MainTab() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<tabs>("main");
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const { authenticated, ready, user, login } = usePrivy();
+
+  const shortAddress = (addr?: string) =>
+    addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : "";
 
   return (
     <div className="min-h-screen max-w-[2000px] mx-auto ">
@@ -34,8 +44,41 @@ export default function MainTab() {
           <NavTabs activeTab={activeTab} setActiveTab={setActiveTab} />
         )}
 
-        {/* Decorative circles */}
-        <div className="w-24 h-24 rounded-full bg-[#2a2b34] opacity-50"></div>
+        {/* Wallet actions (replaces decorative circle) */}
+        <div className="flex items-center gap-3">
+          {/* Withdraw */}
+          <Button
+            onClick={() =>
+              authenticated
+                ? setIsWithdrawOpen(true)
+                : login({ loginMethods: ["wallet"] })
+            }
+            className="px-5 py-2.5 rounded-full font-bold text-sm tracking-wider bg-[#2a2b34] text-[#DDD9C7] shadow-[0_0_0_2px_rgba(0,0,0,0.35)] hover:bg-[#343541] transition-colors"
+          >
+            WITHDRAW
+          </Button>
+          {/* Deposit */}
+          <Button
+            onClick={() =>
+              authenticated
+                ? setIsDepositOpen(true)
+                : login({ loginMethods: ["wallet"] })
+            }
+            className="px-5 py-2.5 rounded-full font-bold text-sm tracking-wider bg-[#7ACD54] text-white hover:bg-[#6ab844] transition-colors shadow-[4px_4px_0_0_#65ab44]"
+          >
+            DEPOSIT
+          </Button>
+          {/* Wallet chip */}
+          <Button
+            onClick={() =>
+              authenticated ? null : login({ loginMethods: ["wallet"] })
+            }
+            className="relative rounded-full px-5 py-2.5 font-bold text-sm text-white"
+            title={authenticated ? user?.wallet?.address : "Connect Wallet"}
+          >
+            {authenticated ? shortAddress(user?.wallet?.address) : "Connect"}
+          </Button>
+        </div>
       </div>
 
       {/* Home Page */}
@@ -70,6 +113,7 @@ export default function MainTab() {
                     .filter((data) => data.actionType == "join")
                     .map((data) => (
                       <GameCard
+                        key={data.host}
                         stake={data.stake}
                         players={data.players}
                         blueTeam={data.blueTeam}
@@ -82,6 +126,7 @@ export default function MainTab() {
                     .filter((data) => data.actionType == "spectate")
                     .map((data) => (
                       <GameCard
+                        key={data.host}
                         stake={data.stake}
                         players={data.players}
                         blueTeam={data.blueTeam}
@@ -98,6 +143,15 @@ export default function MainTab() {
           {isModalOpen && (
             <CreateLobbyModal onClose={() => setIsModalOpen(false)} />
           )}
+          {/* Header modals */}
+          <DepositModal
+            isOpen={isDepositOpen}
+            onClose={() => setIsDepositOpen(false)}
+          />
+          <WithdrawModal
+            isOpen={isWithdrawOpen}
+            onClose={() => setIsWithdrawOpen(false)}
+          />
         </div>
       )}
     </div>
