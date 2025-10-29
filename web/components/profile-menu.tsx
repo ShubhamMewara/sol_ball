@@ -10,6 +10,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/store/auth";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import ChatSidebar from "./chat-sidebar";
 
 export function ProfilePage() {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
@@ -40,6 +41,8 @@ export function ProfilePage() {
 
   return (
     <div className="flex gap-6 px-6 pb-8 max-w-[1800px] mx-auto">
+      <ChatSidebar />
+
       {/* Left Card - Profile */}
       <div className="flex-1 bg-[#1a1b24] rounded-lg border-b-4 border-[#7ACD54] p-8 shadow-lg shadow-[#7ACD54]/10">
         <h2 className="text-white font-bold text-2xl mb-8 text-center">

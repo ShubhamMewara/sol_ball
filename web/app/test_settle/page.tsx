@@ -15,21 +15,20 @@ import React from "react";
 import IDL from "../../compiled/solball.json";
 import { BN, Program } from "@coral-xyz/anchor";
 import { Solball } from "@/compiled/solball";
-import { usePrivy } from "@privy-io/react-auth";
 
 const page = () => {
-  const { ready, user } = usePrivy();
+  const { wallets, ready } = useWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
-  const { wallets } = useWallets();
 
   const join_match = async () => {
     const connection = new Connection(clusterApiUrl("devnet"));
     // replace with hook
     const selectedWallet = wallets[0];
+
     const [user_sub_account] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("user_sub_account"),
-        new PublicKey(user?.wallet?.address!).toBuffer(),
+        new PublicKey(selectedWallet.address).toBuffer(),
       ],
       new PublicKey(IDL.address)
     );
@@ -37,7 +36,7 @@ const page = () => {
     console.log(balance);
     const program: Program<Solball> = new Program(IDL, {
       connection: connection,
-      publicKey: new PublicKey(user?.wallet?.address!),
+      publicKey: new PublicKey(selectedWallet.address!),
     });
 
     const [myKey] = PublicKey.findProgramAddressSync(
@@ -49,21 +48,14 @@ const page = () => {
       ],
       new PublicKey(IDL.address)
     );
-    const [IotaKey] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user_sub_account"),
-        new PublicKey(
-          "49tYtcCf7WXZsCgQGair7ekKzR3pjuAvrgwz8eSKixUC"
-        ).toBuffer(),
-      ],
+    const [bank_account] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bank_account")],
       new PublicKey(IDL.address)
     );
-
+    console.log(`bank acc`, bank_account.toString());
+    const bank_balance = await connection.getBalance(bank_account);
+    console.log(`Bank balance`, bank_balance);
     const playerSubAccounts = [myKey];
-    const playerWalletKeys = [
-      new PublicKey("5NHvrqoZk4ov5GvKzDpsmEeW4URwLuG6P4HrmSDTqHc7"),
-      new PublicKey("49tYtcCf7WXZsCgQGair7ekKzR3pjuAvrgwz8eSKixUC"),
-    ];
     const remainingAccounts = playerSubAccounts.map((pubkey) => {
       return {
         pubkey,
@@ -72,7 +64,7 @@ const page = () => {
       };
     });
     const ix = await program.methods
-      .joinMatch(new BN(10000), playerWalletKeys)
+      .settleMatch(new BN(8000))
       .remainingAccounts(remainingAccounts)
       .instruction();
 
@@ -80,13 +72,12 @@ const page = () => {
     if (!ix.programId) throw new Error("❌ programId missing from instruction");
 
     const tx = new Transaction({
-      feePayer: new PublicKey(user?.wallet?.address!),
+      feePayer: new PublicKey(selectedWallet.address!),
       blockhash: bx.blockhash,
       lastValidBlockHeight: bx.lastValidBlockHeight,
     }).add(ix);
     const res = await connection.simulateTransaction(tx);
     console.log(res);
-    // connection.simulateTransaction(tx)
     const msg = new TransactionMessage({
       payerKey: new PublicKey(selectedWallet.address!),
       recentBlockhash: bx.blockhash,
@@ -105,39 +96,9 @@ const page = () => {
     );
   };
 
-  const init_bank = async () => {
-    const connection = new Connection(clusterApiUrl("devnet"));
-    const program: Program<Solball> = new Program(IDL, {
-      connection: connection,
-      publicKey: new PublicKey(user?.wallet?.address!),
-    });
-
-    const ix = await program.methods.initBank().instruction();
-    const bx = await connection.getLatestBlockhash();
-
-    const msg = new TransactionMessage({
-      payerKey: new PublicKey(user?.wallet!.address!),
-      recentBlockhash: bx.blockhash,
-      instructions: [ix],
-    }).compileToV0Message();
-
-    const versionedTx = new VersionedTransaction(msg);
-    // Send the transaction
-    const result = await signAndSendTransaction({
-      transaction: versionedTx.serialize(),
-      wallet: wallets[0]!,
-    });
-    console.log(
-      "Transaction sent with signature:",
-      result.signature.toString()
-    );
-    console.log(ix);
-  };
-
   return (
     <div className="h-screen w-full mx-auto flex items-center justify-center">
-      <button onClick={() => init_bank()}>INIT BANK</button>
-      <button onClick={() => join_match()}>Join Match</button>
+      <button onClick={() => join_match()}>Settle Match</button>
     </div>
   );
 };

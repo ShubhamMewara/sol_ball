@@ -9,12 +9,10 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("12N8htoGgDfXqK4Nx9fDYbc8m74SVoWkQXqUp37NaEZ7");
+declare_id!("bf58XNfg83MbH4WQBz9EYHcq2v9EP1VqPmZZqcasqSQ");
 
 #[program]
 pub mod solball {
-
-
     use super::*;
 
     pub fn deposit(ctx: Context<Deposit>, lamports:u64) -> Result<()> {
@@ -29,8 +27,9 @@ pub mod solball {
         instructions::init_bank(ctx)?;
         Ok(())
     }
-    pub fn join_match<'info>(ctx: Context<'_, '_, '_, 'info, Joinmatch<'info>>, entry_fee: u64) -> Result<()> {
-        instructions::join_match(ctx, entry_fee)
+    pub fn join_match<'info>(ctx: Context<'_, '_, '_, 'info, Joinmatch<'info>>, entry_fee: u64,user_pubkeys:Vec<Pubkey>) -> Result<()> {
+        instructions::join_match(ctx, entry_fee,user_pubkeys)?;
+        Ok(())
     }
     pub fn settle_match<'info>(ctx: Context<'_, '_, '_, 'info, SettleMatch<'info>>, winner_share:u64)->Result<()>{
         instructions::settle_match(ctx, winner_share)?;
