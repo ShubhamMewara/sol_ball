@@ -35,7 +35,11 @@ pub fn settle_match<'info>(
     for i in 0..winners {
         let winner = &ctx.remaining_accounts[i];
         // Bank Account Seeds
-        let seeds:&[&[&[u8]]] = &[&[BANK_ACCOUNT]];
+         let (bank_pda, bump) = Pubkey::find_program_address(
+            &[b"bank_account"],
+            ctx.program_id,
+        );
+        let seeds:&[&[&[u8]]] = &[&[BANK_ACCOUNT,&[bump]]];
         // Create system transfer instruction from loser PDA to program for redistribution
         let cpi_ctx = CpiContext::new_with_signer(
         system_program.to_account_info(),

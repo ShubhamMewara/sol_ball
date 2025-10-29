@@ -5,34 +5,43 @@
  * IDL can be found at `target/idl/solball.json`.
  */
 export type Solball = {
-  address: "12N8htoGgDfXqK4Nx9fDYbc8m74SVoWkQXqUp37NaEZ7";
-  metadata: {
-    name: "solball";
-    version: "0.1.0";
-    spec: "0.1.0";
-    description: "Created with Anchor";
-  };
-  instructions: [
+  "address": "bf58XNfg83MbH4WQBz9EYHcq2v9EP1VqPmZZqcasqSQ",
+  "metadata": {
+    "name": "solball",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
     {
-      name: "deposit";
-      discriminator: [242, 35, 198, 137, 82, 225, 242, 182];
-      accounts: [
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
         {
-          name: "signer";
-          writable: true;
-          signer: true;
+          "name": "signer",
+          "writable": true,
+          "signer": true
         },
         {
-          name: "userSubAccount";
-          docs: [
+          "name": "userSubAccount",
+          "docs": [
             "It's safe because we control the derivation and the System Program owns it./// CHECK: This account is initialized as a PDA derived from the signer's pubkey."
-          ];
-          writable: true;
-          pda: {
-            seeds: [
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -49,108 +58,167 @@ export type Solball = {
                   117,
                   110,
                   116
-                ];
+                ]
               },
               {
-                kind: "account";
-                path: "signer";
+                "kind": "account",
+                "path": "signer"
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "systemProgram";
-          address: "11111111111111111111111111111111";
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
-      ];
-      args: [
+      ],
+      "args": [
         {
-          name: "lamports";
-          type: "u64";
+          "name": "lamports",
+          "type": "u64"
         }
-      ];
+      ]
     },
     {
-      name: "initBank";
-      discriminator: [73, 111, 27, 243, 202, 129, 159, 80];
-      accounts: [
+      "name": "initBank",
+      "discriminator": [
+        73,
+        111,
+        27,
+        243,
+        202,
+        129,
+        159,
+        80
+      ],
+      "accounts": [
         {
-          name: "admin";
-          writable: true;
-          signer: true;
+          "name": "admin",
+          "writable": true,
+          "signer": true
         },
         {
-          name: "bankAccount";
-          docs: [
+          "name": "bankAccount",
+          "docs": [
             "It's safe because we control the derivation and the System Program owns it./// CHECK: This account is initialized as a PDA derived from the signer's pubkey."
-          ];
-          writable: true;
-          pda: {
-            seeds: [
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [98, 97, 110, 107, 95, 97, 99, 99, 111, 117, 110, 116];
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  110,
+                  107,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "systemProgram";
-          address: "11111111111111111111111111111111";
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
-      ];
-      args: [];
+      ],
+      "args": []
     },
     {
-      name: "joinMatch";
-      discriminator: [244, 8, 47, 130, 192, 59, 179, 44];
-      accounts: [
+      "name": "joinMatch",
+      "discriminator": [
+        244,
+        8,
+        47,
+        130,
+        192,
+        59,
+        179,
+        44
+      ],
+      "accounts": [
         {
-          name: "signer";
-          writable: true;
-          signer: true;
+          "name": "signer",
+          "writable": true,
+          "signer": true
         },
         {
-          name: "bankAccount";
-          writable: true;
-          pda: {
-            seeds: [
+          "name": "bankAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [98, 97, 110, 107, 95, 97, 99, 99, 111, 117, 110, 116];
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  110,
+                  107,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "systemProgram";
-          address: "11111111111111111111111111111111";
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
-      ];
-      args: [
+      ],
+      "args": [
         {
-          name: "entryFee";
-          type: "u64";
+          "name": "entryFee",
+          "type": "u64"
+        },
+        {
+          "name": "userPubkeys",
+          "type": {
+            "vec": "pubkey"
+          }
         }
-      ];
+      ]
     },
     {
-      name: "settleMatch";
-      discriminator: [71, 124, 117, 96, 191, 217, 116, 24];
-      accounts: [
+      "name": "settleMatch",
+      "discriminator": [
+        71,
+        124,
+        117,
+        96,
+        191,
+        217,
+        116,
+        24
+      ],
+      "accounts": [
         {
-          name: "signer";
-          writable: true;
-          signer: true;
+          "name": "signer",
+          "writable": true,
+          "signer": true
         },
         {
-          name: "userSubAccount";
-          writable: true;
-          pda: {
-            seeds: [
+          "name": "userSubAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -167,56 +235,78 @@ export type Solball = {
                   117,
                   110,
                   116
-                ];
+                ]
               },
               {
-                kind: "account";
-                path: "signer";
+                "kind": "account",
+                "path": "signer"
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "bankAccount";
-          writable: true;
-          pda: {
-            seeds: [
+          "name": "bankAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [98, 97, 110, 107, 95, 97, 99, 99, 111, 117, 110, 116];
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  110,
+                  107,
+                  95,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116
+                ]
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "systemProgram";
-          address: "11111111111111111111111111111111";
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
-      ];
-      args: [
+      ],
+      "args": [
         {
-          name: "winnerShare";
-          type: "u64";
+          "name": "winnerShare",
+          "type": "u64"
         }
-      ];
+      ]
     },
     {
-      name: "withdraw";
-      discriminator: [183, 18, 70, 156, 148, 109, 161, 34];
-      accounts: [
+      "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
         {
-          name: "signer";
-          writable: true;
-          signer: true;
+          "name": "signer",
+          "writable": true,
+          "signer": true
         },
         {
-          name: "userSubAccount";
-          writable: true;
-          pda: {
-            seeds: [
+          "name": "userSubAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
               {
-                kind: "const";
-                value: [
+                "kind": "const",
+                "value": [
                   117,
                   115,
                   101,
@@ -233,40 +323,40 @@ export type Solball = {
                   117,
                   110,
                   116
-                ];
+                ]
               },
               {
-                kind: "account";
-                path: "signer";
+                "kind": "account",
+                "path": "signer"
               }
-            ];
-          };
+            ]
+          }
         },
         {
-          name: "systemProgram";
-          address: "11111111111111111111111111111111";
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
-      ];
-      args: [
+      ],
+      "args": [
         {
-          name: "lamports";
-          type: "u64";
+          "name": "lamports",
+          "type": "u64"
         }
-      ];
+      ]
     }
-  ];
-  errors: [
+  ],
+  "errors": [
     {
-      code: 6000;
-      name: "customError";
-      msg: "Custom error message";
+      "code": 6000,
+      "name": "customError",
+      "msg": "Custom error message"
     }
-  ];
-  constants: [
+  ],
+  "constants": [
     {
-      name: "seed";
-      type: "string";
-      value: '"anchor"';
+      "name": "seed",
+      "type": "string",
+      "value": "\"anchor\""
     }
-  ];
+  ]
 };

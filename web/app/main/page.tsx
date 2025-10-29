@@ -72,7 +72,7 @@ const Page = () => {
   }, []);
   return (
     <>
-      <div className="px-6 pb-8">
+      <div className="px-6 pb-8 max-w-[1800px] mx-auto">
         <div className="relative flex flex-col gap-6 lg:flex-row">
           <ChatSidebar />
           <main className="flex-1">

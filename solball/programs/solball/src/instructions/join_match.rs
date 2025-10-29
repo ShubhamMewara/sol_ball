@@ -15,21 +15,20 @@ pub struct Joinmatch<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn join_match<'info>(ctx: Context<'_, '_, '_, 'info, Joinmatch<'info>>, entry_fee: u64) -> Result<()> {
+pub fn join_match<'info>(ctx: Context<'_, '_, '_, 'info, Joinmatch<'info>>, entry_fee: u64,user_pubkeys:Vec<Pubkey>) -> Result<()> {
     let num_players = ctx.remaining_accounts.len();
     
     for i in 0..num_players {
         // Extract Player and Player Bump
         let player = &ctx.remaining_accounts[i];
+        let user_wallet = user_pubkeys[i];
         let (_expected_pda, bump) = Pubkey::find_program_address(
-            &[b"user_sub_account", player.key().as_ref()],
+            &[b"user_sub_account", user_wallet.key().as_ref()],
             ctx.program_id,
         );
-        
-        let player_key = player.key();
         let signer_seeds: &[&[&[u8]]] = &[&[
             USER_SUB_ACCOUNT,
-            player_key.as_ref(),
+            user_wallet.as_ref(),
             &[bump]
         ]];
 
