@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import CreateLobbyModal from "./create-lobby-modal";
 import LobbyWaitingModal from "./lobby-room";
+import { slugify } from "@/lib/utils";
 
 interface GameCardProps {
   stake: number;
@@ -11,6 +11,7 @@ interface GameCardProps {
   redTeam: string[];
   actionType: "spectate" | "join";
   host: string;
+  roomId?: string;
 }
 
 export default function GameCard({
@@ -20,8 +21,10 @@ export default function GameCard({
   redTeam,
   actionType,
   host,
+  roomId,
 }: GameCardProps) {
   const [isLobbyModalOpen, setisLobbyModalOpen] = useState(false);
+  const derivedRoom = roomId ?? slugify(host);
 
   return (
     <div className="border-b-4 border-[#7ACD54] rounded-lg bg-[#1a1b24] p-6 flex flex-col justify-between min-h-64 shadow-lg shadow-[#7ACD54]/10">
@@ -90,6 +93,7 @@ export default function GameCard({
             setisLobbyModalOpen(false);
           }}
           prizePot={stake}
+          roomId={derivedRoom}
           existingPlayers={{
             redTeam: redTeam.map((player) => ({
               name: player,

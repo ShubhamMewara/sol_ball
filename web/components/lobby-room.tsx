@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
+import { joinLobby } from "@/lib/lobbies";
+import { useRouter } from "next/navigation";
 
 interface Player {
   name: string;
@@ -18,6 +21,7 @@ interface LobbyWaitingModalProps {
     blueTeam: Player[];
   };
   hostName: string;
+  roomId: string;
 }
 
 export default function LobbyWaitingModal({
@@ -28,7 +32,10 @@ export default function LobbyWaitingModal({
   isHost = false, // Default to false if not provided
   existingPlayers,
   hostName,
+  roomId,
 }: LobbyWaitingModalProps) {
+  const { user } = usePrivy();
+  const router = useRouter();
   const [selectedTeam, setSelectedTeam] = useState<"red" | "blue" | null>(null);
   const [redTeam, setRedTeam] = useState<Player[]>(
     existingPlayers?.redTeam || []
@@ -44,11 +51,19 @@ export default function LobbyWaitingModal({
   const allSlotsFilled = totalPlayers === maxPlayers;
 
   const handleStartMatch = () => {
-    console.log(" Host starting match...");
-    // Add your match start logic here
+    router.push(`/game/${encodeURIComponent(roomId)}`);
+  };
+
+  const handleJoin = () => {
+    router.push(`/game/${encodeURIComponent(roomId)}`);
   };
 
   const handleTeamSelect = (team: "red" | "blue") => {
+    // persist selection
+    try {
+      const uid = user?.wallet?.address || user?.id || "guest";
+      joinLobby(roomId, uid, team).catch(() => {});
+    } catch {}
     // Remove current user from both teams first
     const newRedTeam = redTeam.filter((p) => !p.isCurrentUser);
     const newBlueTeam = blueTeam.filter((p) => !p.isCurrentUser);
@@ -198,6 +213,14 @@ export default function LobbyWaitingModal({
               className="px-8 py-4 rounded-full font-bold text-lg bg-[#7ACD54] text-white hover:bg-[#6BBD44] transition-all shadow-lg shadow-[#7ACD54]/30"
             >
               START MATCH
+            </button>
+          )}
+          {!isHost && (
+            <button
+              onClick={handleJoin}
+              className="px-8 py-4 rounded-full font-bold text-lg bg-[#7ACD54] text-white hover:bg-[#6BBD44] transition-all shadow-lg shadow-[#7ACD54]/30"
+            >
+              ENTER MATCH
             </button>
           )}
           <button

@@ -1,15 +1,18 @@
 "use client";
-
-import { lobbyData } from "@/lib/data";
 import { Dispatch, SetStateAction, useState } from "react";
 import { toast } from "sonner";
-import LobbyWaitingModal from "./lobby-room";
+import { slugify } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { usePrivy } from "@privy-io/react-auth";
+import { createLobby } from "@/lib/lobbies";
 
 interface CreateLobbyModalProps {
   onClose: () => Dispatch<SetStateAction<boolean>>;
 }
 
 export default function CreateLobbyModal({ onClose }: any) {
+  const router = useRouter();
+  const { authenticated, user, login } = usePrivy();
   const [prizePot, setPrizePot] = useState(0.001);
   const [players, setPlayers] = useState(3);
   const [minutes, setMinutes] = useState(3);
@@ -28,17 +31,27 @@ export default function CreateLobbyModal({ onClose }: any) {
   };
 
   const createLobbyHandler = async () => {
-    lobbyData.push({
-      actionType: "join",
-      blueTeam: ["piyushhsainii"],
-      redTeam: [],
-      players: players,
-      stake: prizePot,
-      host: "piyushhsainii",
-    });
-    toast("Lobby Created Successfully!");
-    setIsModalOpen(true);
-    onClose();
+    if (!authenticated) {
+      await login();
+      return;
+    }
+    const host = user?.wallet?.address || user?.id || "user";
+    const id = slugify(`${host}-${Date.now()}`);
+    try {
+      await createLobby({
+        room_id: id,
+        host,
+        stake: prizePot,
+        players,
+        status: "open",
+      });
+      toast("Lobby Created Successfully!");
+      onClose();
+      router.push(`/game/${encodeURIComponent(id)}`);
+    } catch (e: any) {
+      console.error(e);
+      toast("Failed to create lobby");
+    }
   };
 
   return (
@@ -149,6 +162,7 @@ export default function CreateLobbyModal({ onClose }: any) {
           Cancel
         </button>
       </div>
+      {/* Lobby modal now navigates directly to /game/[roomId] after creation */}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { useGameLoop } from "../hooks/useGameLoop";
 import { useGameStore } from "../store/gameStore";
 import { useOnlineGame } from "../hooks/net/useOnlineGame";
 
-export default function PlanckGame() {
+export default function PlanckGame({ room }: { room?: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Simple toggle to switch between Local and Online play
@@ -18,7 +18,7 @@ export default function PlanckGame() {
   const scoreRight = useGameStore((s) => s.scoreRight);
 
   function OnlineGame() {
-    useOnlineGame(canvasRef);
+    useOnlineGame(canvasRef, room || "default");
     return null;
   }
 

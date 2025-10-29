@@ -9,12 +9,13 @@ import { UserProfile } from "@/lib/types";
 import { usePrivy } from "@privy-io/react-auth";
 import { LogOut } from "lucide-react";
 
-export default function ProfileTab() {
+export function ProfilePage() {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [User, setUser] = useState<UserProfile | null>(null);
   const [isFetchingStatus, setisFetchingStatus] = useState(false);
   const { authenticated, user, ready, login, logout } = usePrivy();
+
   const connectDiscord = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "discord",
@@ -24,13 +25,10 @@ export default function ProfileTab() {
     });
   };
 
-  // 1432703257611997225
-
   useEffect(() => {
     const isLoggedIn = async () => {
       setisFetchingStatus(true);
       const { data, error } = await supabase.auth.getSession();
-      console.log(data.session?.user);
       setUser((data.session?.user as UserProfile) ?? null);
       setisFetchingStatus(false);
     };

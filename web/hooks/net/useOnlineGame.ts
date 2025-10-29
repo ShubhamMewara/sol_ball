@@ -17,7 +17,8 @@ function getHost() {
 }
 
 export function useOnlineGame(
-  canvasRef: React.RefObject<HTMLCanvasElement | null>
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  roomName: string
 ) {
   const socketRef = useRef<PartySocket | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -38,9 +39,8 @@ export function useOnlineGame(
     ctxRef.current = ctx;
 
     // Connect to PartyKit room
-    const host = getHost();
-    const room = "default"; // can be customized later
-    const socket = new PartySocket({ host, room });
+  const host = getHost();
+  const socket = new PartySocket({ host, room: roomName || "default" });
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
@@ -206,5 +206,5 @@ export function useOnlineGame(
       snapshotsRef.current = [];
       meRef.current = null;
     };
-  }, [canvasRef]);
+  }, [canvasRef, roomName]);
 }
