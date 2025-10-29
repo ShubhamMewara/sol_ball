@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { joinLobby } from "@/lib/lobbies";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/supabase/client";
 
 interface Player {
   name: string;
@@ -37,52 +38,111 @@ export default function LobbyWaitingModal({
   const { user } = usePrivy();
   const router = useRouter();
   const [selectedTeam, setSelectedTeam] = useState<"red" | "blue" | null>(null);
-  const [redTeam, setRedTeam] = useState<Player[]>(
-    existingPlayers?.redTeam || []
-  );
-  const [blueTeam, setBlueTeam] = useState<Player[]>(
-    existingPlayers?.blueTeam || []
-  );
+  const [redTeam, setRedTeam] = useState<Player[]>(existingPlayers?.redTeam || []);
+  const [blueTeam, setBlueTeam] = useState<Player[]>(existingPlayers?.blueTeam || []);
 
-  const currentUser = { name: "piyushhsainii", isCurrentUser: true };
+  const myId = useMemo(
+    () => user?.wallet?.address || user?.id || "",
+    [user]
+  );
+  // myId label not needed in UI; we render truncated labels from DB entries
 
   const totalPlayers = redTeam.length + blueTeam.length;
   const maxPlayers = maxPlayersPerTeam * 2;
   const allSlotsFilled = totalPlayers === maxPlayers;
 
   const handleStartMatch = () => {
-    router.push(`/game/${encodeURIComponent(roomId)}`);
+    if (totalPlayers < 2) return; // require at least 2 players
+    const mins = parseInt(String(matchDuration).replace(/[^0-9]/g, "")) || 3;
+    const params = new URLSearchParams({ start: "1", duration: String(mins) });
+    if (selectedTeam) params.set("team", selectedTeam);
+    params.set("teamSize", String(maxPlayersPerTeam));
+    router.push(`/game/${encodeURIComponent(roomId)}?${params.toString()}`);
   };
 
   const handleJoin = () => {
-    router.push(`/game/${encodeURIComponent(roomId)}`);
+    if (!selectedTeam) return; // force team selection
+    const params = new URLSearchParams();
+    params.set("team", selectedTeam);
+    params.set("teamSize", String(maxPlayersPerTeam));
+    router.push(`/game/${encodeURIComponent(roomId)}?${params.toString()}`);
   };
 
   const handleTeamSelect = (team: "red" | "blue") => {
     // persist selection
     try {
-      const uid = user?.wallet?.address || user?.id || "guest";
+      const uid = myId || "guest";
+      // Check capacity client-side
+      if (team === "red" && redTeam.length >= maxPlayersPerTeam) return;
+      if (team === "blue" && blueTeam.length >= maxPlayersPerTeam) return;
       joinLobby(roomId, uid, team).catch(() => {});
     } catch {}
-    // Remove current user from both teams first
-    const newRedTeam = redTeam.filter((p) => !p.isCurrentUser);
-    const newBlueTeam = blueTeam.filter((p) => !p.isCurrentUser);
-
-    // Add current user to selected team
-    if (team === "red" && newRedTeam.length < maxPlayersPerTeam) {
-      setRedTeam([...newRedTeam, currentUser]);
-      setBlueTeam(newBlueTeam);
-      setSelectedTeam("red");
-    } else if (team === "blue" && newBlueTeam.length < maxPlayersPerTeam) {
-      setBlueTeam([...newBlueTeam, currentUser]);
-      setRedTeam(newRedTeam);
-      setSelectedTeam("blue");
-    }
+    // UI will sync from realtime subscription below
   };
 
   // Create empty slots for teams
   const redSlots = Array(maxPlayersPerTeam).fill(null);
   const blueSlots = Array(maxPlayersPerTeam).fill(null);
+
+  // Load and subscribe to lobby members for this room
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("lobby_members")
+          .select("user_id, team")
+          .eq("lobby_room_id", roomId);
+        if (error) throw error;
+        if (!active) return;
+        const red: Player[] = [];
+        const blue: Player[] = [];
+        for (const row of data || []) {
+          const label = row.user_id.length > 10
+            ? `${row.user_id.slice(0, 4)}…${row.user_id.slice(-4)}`
+            : row.user_id;
+          const p: Player = {
+            name: label,
+            isCurrentUser: row.user_id === myId,
+          };
+          (row.team === "red" ? red : blue).push(p);
+        }
+        setRedTeam(red.slice(0, maxPlayersPerTeam));
+        setBlueTeam(blue.slice(0, maxPlayersPerTeam));
+        // Reflect selectedTeam from membership
+        if (data?.some((r) => r.user_id === myId && r.team === "red"))
+          setSelectedTeam("red");
+        else if (data?.some((r) => r.user_id === myId && r.team === "blue"))
+          setSelectedTeam("blue");
+        else setSelectedTeam(null);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    refresh();
+
+    const channel = supabase
+      .channel(`lobby-members-${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "lobby_members",
+          filter: `lobby_room_id=eq.${roomId}`,
+        },
+        () => refresh()
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
+  }, [roomId, myId, maxPlayersPerTeam]);
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
@@ -104,15 +164,9 @@ export default function LobbyWaitingModal({
 
         <div className="text-center mb-6">
           {isHost ? (
-            allSlotsFilled ? (
-              <div className="text-[#7ACD54] font-bold text-lg animate-pulse">
-                All players ready! You can start the match.
-              </div>
-            ) : (
-              <div className="text-[#DDD9C7] text-sm">
-                Waiting for players... ({totalPlayers}/{maxPlayers})
-              </div>
-            )
+            <div className="text-[#DDD9C7] text-sm">
+              Players joined: {totalPlayers}/{maxPlayers}
+            </div>
           ) : (
             <div className="text-[#DDD9C7] text-sm animate-pulse">
               Waiting for host {`(${hostName})`} to start the match...
@@ -126,10 +180,11 @@ export default function LobbyWaitingModal({
           <div className="flex-1">
             <button
               onClick={() => handleTeamSelect("red")}
+              disabled={redTeam.length >= maxPlayersPerTeam}
               className={`w-full py-3 rounded-full font-bold text-lg mb-4 transition-all shadow-lg ${
                 selectedTeam === "red"
                   ? "bg-[#FF6B6B] text-white shadow-[#FF6B6B]/40 scale-105"
-                  : "bg-[#FF6B6B]/80 text-white hover:bg-[#FF6B6B] shadow-[#FF6B6B]/20"
+                  : `bg-[#FF6B6B]/80 text-white ${redTeam.length >= maxPlayersPerTeam ? "opacity-50 cursor-not-allowed" : "hover:bg-[#FF6B6B]"} shadow-[#FF6B6B]/20`
               }`}
             >
               RED
@@ -170,10 +225,11 @@ export default function LobbyWaitingModal({
           <div className="flex-1">
             <button
               onClick={() => handleTeamSelect("blue")}
+              disabled={blueTeam.length >= maxPlayersPerTeam}
               className={`w-full py-3 rounded-full font-bold text-lg mb-4 transition-all shadow-lg ${
                 selectedTeam === "blue"
                   ? "bg-[#4FC3F7] text-white shadow-[#4FC3F7]/40 scale-105"
-                  : "bg-[#4FC3F7]/80 text-white hover:bg-[#4FC3F7] shadow-[#4FC3F7]/20"
+                  : `bg-[#4FC3F7]/80 text-white ${blueTeam.length >= maxPlayersPerTeam ? "opacity-50 cursor-not-allowed" : "hover:bg-[#4FC3F7]"} shadow-[#4FC3F7]/20`
               }`}
             >
               BLUE
@@ -207,9 +263,10 @@ export default function LobbyWaitingModal({
         </div>
 
         <div className="flex gap-4 justify-center">
-          {isHost && allSlotsFilled && (
+          {isHost && (
             <button
               onClick={handleStartMatch}
+              disabled={totalPlayers < 2}
               className="px-8 py-4 rounded-full font-bold text-lg bg-[#7ACD54] text-white hover:bg-[#6BBD44] transition-all shadow-lg shadow-[#7ACD54]/30"
             >
               START MATCH
@@ -218,6 +275,7 @@ export default function LobbyWaitingModal({
           {!isHost && (
             <button
               onClick={handleJoin}
+              disabled={!selectedTeam}
               className="px-8 py-4 rounded-full font-bold text-lg bg-[#7ACD54] text-white hover:bg-[#6BBD44] transition-all shadow-lg shadow-[#7ACD54]/30"
             >
               ENTER MATCH

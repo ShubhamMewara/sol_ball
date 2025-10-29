@@ -1,38 +1,24 @@
 import { supabase } from "@/supabase/client";
+import { TablesInsert } from "@/supabase/database.types";
 
-export type Lobby = {
-  room_id: string;
-  host: string;
-  stake: number;
-  players: number; // per team
-  status?: "open" | "starting" | "in_game" | "closed";
-  created_at?: string;
-};
-
-export async function createLobby(lobby: Lobby) {
-  const { data, error } = await (supabase as any)
+export async function createLobby(lobby: TablesInsert<"lobbies">) {
+  const { data, error } = await supabase
     .from("lobbies")
-    .insert({
-      room_id: lobby.room_id,
-      host: lobby.host,
-      stake: lobby.stake,
-      players: lobby.players,
-      status: lobby.status ?? "open",
-    })
+    .insert(lobby)
     .select()
     .single();
   if (error) throw error;
-  return data as Lobby;
+  return data;
 }
 
 export async function getLobbies() {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("lobbies")
-    .select("room_id, host, stake, players, status, created_at")
+    .select("*")
     .eq("status", "open")
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as Lobby[];
+  return data;
 }
 
 export async function joinLobby(
@@ -40,7 +26,7 @@ export async function joinLobby(
   user_id: string,
   team: "red" | "blue"
 ) {
-  const { error } = await (supabase as any).from("lobby_members").upsert(
+  const { error } = await supabase.from("lobby_members").upsert(
     {
       lobby_room_id: room_id,
       user_id,
@@ -52,7 +38,7 @@ export async function joinLobby(
 }
 
 export async function getLobbyMembers(room_id: string) {
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("lobby_members")
     .select("user_id, team")
     .eq("lobby_room_id", room_id);

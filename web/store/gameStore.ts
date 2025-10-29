@@ -23,6 +23,10 @@ export type GameState = {
   scoreRight: number; // goals scored into RIGHT net (by left-side attacker)
   lastGoalAt?: number;
   addGoal: (side: "left" | "right") => void;
+  // Online-game specific derived state
+  phase?: "waiting" | "playing" | "ended";
+  timerMs?: number;
+  winnerSide?: "left" | "right" | "draw" | null;
 };
 
 const defaultConfig: GameConfig = {
@@ -63,4 +67,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         lastGoalAt: now,
       };
     }),
+  phase: "waiting",
+  timerMs: undefined,
+  winnerSide: null,
 }));

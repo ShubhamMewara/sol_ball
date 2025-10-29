@@ -19,27 +19,33 @@ export type Database = {
           created_at: string
           host: string
           id: string
+          match_minutes: number | null
           players: number
           room_id: string
           stake: number
+          started_at: string | null
           status: string | null
         }
         Insert: {
           created_at?: string
           host: string
           id?: string
+          match_minutes?: number | null
           players: number
           room_id: string
           stake: number
+          started_at?: string | null
           status?: string | null
         }
         Update: {
           created_at?: string
           host?: string
           id?: string
+          match_minutes?: number | null
           players?: number
           room_id?: string
           stake?: number
+          started_at?: string | null
           status?: string | null
         }
         Relationships: []
@@ -80,21 +86,21 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
-          id: number
+          id: string
           username: string | null
           wallet_key: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
-          id?: number
+          id?: string
           username?: string | null
           wallet_key: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
-          id?: number
+          id?: string
           username?: string | null
           wallet_key?: string
         }

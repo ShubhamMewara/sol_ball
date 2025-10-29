@@ -3,6 +3,7 @@
 import { useState } from "react";
 import LobbyWaitingModal from "./lobby-room";
 import { slugify } from "@/lib/utils";
+import { usePrivy } from "@privy-io/react-auth";
 
 interface GameCardProps {
   stake: number;
@@ -12,6 +13,7 @@ interface GameCardProps {
   actionType: "spectate" | "join";
   host: string;
   roomId?: string;
+  matchMinutes?: number | null;
 }
 
 export default function GameCard({
@@ -22,9 +24,14 @@ export default function GameCard({
   actionType,
   host,
   roomId,
+  matchMinutes,
 }: GameCardProps) {
   const [isLobbyModalOpen, setisLobbyModalOpen] = useState(false);
   const derivedRoom = roomId ?? slugify(host);
+  const { user } = usePrivy();
+  const myId = user?.wallet?.address || user?.id || "";
+  const isHost = myId && host && myId === host;
+  const durationLabel = matchMinutes ? `${matchMinutes}m` : "";
 
   return (
     <div className="border-b-4 border-[#7ACD54] rounded-lg bg-[#1a1b24] p-6 flex flex-col justify-between min-h-64 shadow-lg shadow-[#7ACD54]/10">
@@ -33,14 +40,14 @@ export default function GameCard({
         {/* Players and Stake */}
         <div className="flex justify-between items-center mb-6">
           <span className="text-white font-bold text-lg">
-            {JSON.stringify(players)}VS{JSON.stringify(players)}
+            {players} VS {players}
           </span>
           <div className="text-center flex-1">
             <span
               className="text-white font-bold text-2xl drop-shadow-lg"
               style={{ textShadow: "0 4px 12px rgba(122, 205, 84, 0.3)" }}
             >
-              {JSON.stringify(stake)}$SOL
+              {stake} SOL
             </span>
           </div>
         </div>
@@ -86,9 +93,9 @@ export default function GameCard({
       {isLobbyModalOpen && (
         <LobbyWaitingModal
           hostName={host}
-          isHost={host == "piyushhsainii"}
-          matchDuration=""
-          maxPlayersPerTeam={3}
+          isHost={!!isHost}
+          matchDuration={durationLabel}
+          maxPlayersPerTeam={players}
           onClose={() => {
             setisLobbyModalOpen(false);
           }}
@@ -97,11 +104,11 @@ export default function GameCard({
           existingPlayers={{
             redTeam: redTeam.map((player) => ({
               name: player,
-              isCurrentUser: "piyushhsainii" === player,
+              isCurrentUser: myId === player,
             })),
             blueTeam: blueTeam.map((player) => ({
               name: player,
-              isCurrentUser: "piyushhsainii" === player,
+              isCurrentUser: myId === player,
             })),
           }}
         />

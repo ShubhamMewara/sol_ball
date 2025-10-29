@@ -50,7 +50,7 @@ const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
 
     updateProfile();
     fetchBalance();
-  }, [ready, authenticated]); // ✅ correct dependency array
+  }, [ready, authenticated]);
 
   return <>{children}</>;
 };

@@ -16,9 +16,18 @@ function getHost() {
   );
 }
 
+type StartOptions = {
+  claimHostWallet?: string;
+  startOnConnect?: boolean;
+  durationMin?: number;
+  joinTeam?: "red" | "blue";
+  teamSize?: number;
+};
+
 export function useOnlineGame(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
-  roomName: string
+  roomName: string,
+  opts: StartOptions = {}
 ) {
   const socketRef = useRef<PartySocket | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -44,7 +53,33 @@ export function useOnlineGame(
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
-      socket.send(JSON.stringify({ type: "join", name: "player" }));
+      socket.send(
+        JSON.stringify({
+          type: "join",
+          name: "player",
+          team: opts.joinTeam,
+          teamSize: opts.teamSize,
+        })
+      );
+      // Attempt to claim host if requested
+      if (opts.claimHostWallet) {
+        socket.send(
+          JSON.stringify({
+            type: "claim-host",
+            wallet: opts.claimHostWallet,
+          })
+        );
+      }
+      // Optionally start match immediately (host only; server enforces)
+      if (opts.startOnConnect) {
+        socket.send(
+          JSON.stringify({
+            type: "start",
+            durationMin: opts.durationMin || 3,
+            wallet: opts.claimHostWallet,
+          })
+        );
+      }
     });
 
     socket.addEventListener("message", (ev: MessageEvent) => {
@@ -67,6 +102,16 @@ export function useOnlineGame(
             scoreLeft: s.score.left,
             scoreRight: s.score.right,
           });
+          // Optional phase/timer fields provided by server
+          if (typeof (s as any).timeLeftMs === "number") {
+            useGameStore.setState({ timerMs: (s as any).timeLeftMs });
+          }
+          if ((s as any).phase) {
+            useGameStore.setState({ phase: (s as any).phase });
+          }
+          if ((s as any).winner) {
+            useGameStore.setState({ winnerSide: (s as any).winner });
+          }
         }
       } catch {
         // ignore

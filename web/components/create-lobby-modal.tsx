@@ -1,25 +1,30 @@
 "use client";
-import { Dispatch, SetStateAction, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { slugify } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { createLobby } from "@/lib/lobbies";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-interface CreateLobbyModalProps {
-  onClose: () => Dispatch<SetStateAction<boolean>>;
-}
-
-export default function CreateLobbyModal({ onClose }: any) {
+export default function CreateLobbyModal() {
   const router = useRouter();
   const { authenticated, user, login } = usePrivy();
   const [prizePot, setPrizePot] = useState(0.001);
   const [players, setPlayers] = useState(3);
   const [minutes, setMinutes] = useState(3);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const handlePrizePotChange = (amount: number) => {
-    setPrizePot(Math.max(0, prizePot + amount));
+    const next = Math.max(0.001, +(prizePot + amount).toFixed(3));
+    setPrizePot(next);
   };
 
   const handlePlayersChange = (amount: number) => {
@@ -43,10 +48,11 @@ export default function CreateLobbyModal({ onClose }: any) {
         host,
         stake: prizePot,
         players,
+        match_minutes: minutes,
         status: "open",
       });
       toast("Lobby Created Successfully!");
-      onClose();
+      setOpen(false);
       router.push(`/game/${encodeURIComponent(id)}`);
     } catch (e: any) {
       console.error(e);
@@ -55,15 +61,19 @@ export default function CreateLobbyModal({ onClose }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-[#1a1b24] rounded-lg p-8 w-full max-w-md border-2 border-[#2a2b34]">
-        {/* Title */}
-        <h2 className="text-white font-bold text-2xl text-center mb-8">
-          CREATE A LOBBY
-        </h2>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger className="bg-[#7ACD54] text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all shadow-[4px_4px_0_0_#65ab44]">
+        CREATE A LOBBY
+      </DialogTrigger>
+      <DialogContent className="bg-[#1a1b24] rounded-lg p-8 w-full max-w-md border-2 border-[#2a2b34]">
+        <DialogHeader>
+          <DialogTitle className="text-white font-bold text-2xl text-center mb-2">
+            CREATE A LOBBY
+          </DialogTitle>
+        </DialogHeader>
 
         {/* Prize Pot Section */}
-        <div className="mb-8">
+        <div className="mb-4">
           <h3 className="text-[#DDD9C7] font-bold text-sm mb-2">Prize Pot</h3>
           <div className="text-[#7ACD54] font-bold text-3xl text-center">
             {prizePot.toFixed(3)} SOL
@@ -71,9 +81,9 @@ export default function CreateLobbyModal({ onClose }: any) {
         </div>
 
         {/* Prize Pot Controls */}
-        <div className="mb-8 flex gap-2">
+        <div className="mb-4 flex gap-2">
           <button
-            onClick={() => handlePrizePotChange(0.001)}
+            onClick={() => setPrizePot(0.001)}
             className="flex-1 border-2 border-[#DDD9C7] text-[#DDD9C7] py-2 rounded-lg font-bold hover:bg-[#2a2b34] transition-all"
           >
             0.001
@@ -105,7 +115,7 @@ export default function CreateLobbyModal({ onClose }: any) {
         </div>
 
         {/* Players Section */}
-        <div className="mb-6">
+        <div className="mb-4">
           <div className="flex items-center justify-between gap-2">
             <div className="flex-1 border-2 border-[#DDD9C7] text-[#DDD9C7] py-3 rounded-lg font-bold text-center">
               {players} Players
@@ -126,7 +136,7 @@ export default function CreateLobbyModal({ onClose }: any) {
         </div>
 
         {/* Minutes Section */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center justify-between gap-2">
             <div className="flex-1 border-2 border-[#DDD9C7] text-[#DDD9C7] py-3 rounded-lg font-bold text-center">
               {minutes} Minutes
@@ -146,23 +156,22 @@ export default function CreateLobbyModal({ onClose }: any) {
           </div>
         </div>
 
-        {/* Create Lobby Button */}
-        <button
-          className="w-full bg-[#7ACD54] text-[#14151C] py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all mb-4"
-          onClick={createLobbyHandler}
-        >
-          CREATE LOBBY
-        </button>
+        <DialogFooter>
+          <button
+            className="w-full bg-[#7ACD54] text-[#14151C] py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all mb-4"
+            onClick={createLobbyHandler}
+          >
+            CREATE LOBBY
+          </button>
 
-        {/* Close Button */}
-        <button
-          onClick={() => onClose()}
-          className="w-full text-[#DDD9C7] py-2 font-bold hover:text-white transition-all"
-        >
-          Cancel
-        </button>
-      </div>
-      {/* Lobby modal now navigates directly to /game/[roomId] after creation */}
-    </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="w-full text-[#DDD9C7] py-2 font-bold hover:text-white transition-all"
+          >
+            Cancel
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
