@@ -76,6 +76,30 @@ export type Database = {
           },
         ]
       }
+      profile: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: number
+          username: string | null
+          wallet_key: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: number
+          username?: string | null
+          wallet_key: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: number
+          username?: string | null
+          wallet_key?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

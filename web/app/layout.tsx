@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import PrivvyProvider from "../providers/PrivyProvider";
-import AppProvider from "../providers/WalletProvider";
 import { DynaPuff } from "next/font/google";
 import { NavTabs } from "@/components/NavTabs";
+import ProfileProvider from "@/providers/ProfileProvider";
 
 const dynapuff = DynaPuff({
   subsets: ["latin"], // adjust subsets if needed
@@ -27,10 +26,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={dynapuff.className}>
         <PrivvyProvider>
-          <AppProvider>
+          <ProfileProvider>
             <NavTabs />
             {children}
-          </AppProvider>
+          </ProfileProvider>
         </PrivvyProvider>
       </body>
     </html>

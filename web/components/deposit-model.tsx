@@ -145,8 +145,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
 
         {/* Info */}
         <div className="mb-8 bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] text-sm">
-          <p className="mb-2">Wallet: 7xK9mQ2pL5nR8vW3jH6bF4cD1eG9sT2uY5</p>
-          <p>Fee: 0.001 SOL</p>
+          <p className="mb-2">Wallet: {wallet.user?.wallet?.address} </p>
         </div>
 
         {/* Buttons */}

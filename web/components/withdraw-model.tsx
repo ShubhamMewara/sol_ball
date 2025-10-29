@@ -17,6 +17,8 @@ import { useEffect, useRef, useState } from "react";
 import IDL from "../compiled/solball.json";
 import { BN, Program } from "@coral-xyz/anchor";
 import { Solball } from "@/compiled/solball";
+import { usePrivy } from "@privy-io/react-auth";
+import { useAuth } from "@/store/auth";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -26,6 +28,7 @@ interface WithdrawModalProps {
 export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
   const [amount, setAmount] = useState("");
   const { wallets, ready } = useWallets();
+  const { balance } = useAuth();
   const modalContentRef = useRef(null);
   const { signAndSendTransaction } = useSignAndSendTransaction();
 
@@ -146,7 +149,10 @@ export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
 
         {/* Info */}
         <div className="mb-8 bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] text-sm">
-          <p className="mb-2">Available: 30 SOL</p>
+          <p className="mb-2">
+            Available: {balance ? (balance / LAMPORTS_PER_SOL).toFixed(4) : "0"}{" "}
+            SOL
+          </p>
           <p>Fee: 0.001 SOL</p>
         </div>
 

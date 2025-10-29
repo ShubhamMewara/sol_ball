@@ -7,11 +7,14 @@ import { useEffect, useState } from "react";
 import { getLobbies, Lobby } from "@/lib/lobbies";
 import { usePrivy } from "@privy-io/react-auth";
 import { supabase } from "@/supabase/client";
+import { useAuth } from "@/store/auth";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 const Page = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const { authenticated, login } = usePrivy();
+  const { balance } = useAuth();
 
   useEffect(() => {
     let mounted = true;
@@ -38,15 +41,17 @@ const Page = () => {
             if (prev.find((l) => l.room_id === row.room_id)) return prev;
             return [row, ...prev];
           });
-        },
+        }
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "lobbies" },
         (payload: any) => {
           const row = payload.new as Lobby;
-          setLobbies((prev) => prev.map((l) => (l.room_id === row.room_id ? { ...l, ...row } : l)));
-        },
+          setLobbies((prev) =>
+            prev.map((l) => (l.room_id === row.room_id ? { ...l, ...row } : l))
+          );
+        }
       )
       .on(
         "postgres_changes",
@@ -54,7 +59,7 @@ const Page = () => {
         (payload: any) => {
           const row = payload.old as { room_id: string };
           setLobbies((prev) => prev.filter((l) => l.room_id !== row.room_id));
-        },
+        }
       )
       .subscribe();
 
@@ -78,7 +83,10 @@ const Page = () => {
               >
                 CREATE A LOBBY
               </Button>
-              <Button variant={"outline"}>5 SOL</Button>
+              <Button variant={"outline"}>
+                {" "}
+                {balance ? (balance / LAMPORTS_PER_SOL).toFixed(4) : "0"} SOL
+              </Button>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">

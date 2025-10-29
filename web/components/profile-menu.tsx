@@ -8,6 +8,8 @@ import { supabase } from "@/supabase/client";
 import { UserProfile } from "@/lib/types";
 import { usePrivy } from "@privy-io/react-auth";
 import { LogOut } from "lucide-react";
+import { useAuth } from "@/store/auth";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 export function ProfilePage() {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
@@ -15,6 +17,7 @@ export function ProfilePage() {
   const [User, setUser] = useState<UserProfile | null>(null);
   const [isFetchingStatus, setisFetchingStatus] = useState(false);
   const { authenticated, user, ready, login, logout } = usePrivy();
+  const { balance } = useAuth();
 
   const connectDiscord = async () => {
     await supabase.auth.signInWithOAuth({
@@ -36,7 +39,7 @@ export function ProfilePage() {
   }, []);
 
   return (
-    <div className="flex gap-6 px-6 pb-8">
+    <div className="flex gap-6 px-6 pb-8 max-w-[1800px] mx-auto">
       {/* Left Card - Profile */}
       <div className="flex-1 bg-[#1a1b24] rounded-lg border-b-4 border-[#7ACD54] p-8 shadow-lg shadow-[#7ACD54]/10">
         <h2 className="text-white font-bold text-2xl mb-8 text-center">
@@ -85,7 +88,8 @@ export function ProfilePage() {
             </div>
             <div className="flex items-center justify-center gap-3">
               <div className="text-center text-[#DDD9C7] font-bold text-lg">
-                BALANCE: 30SOL
+                BALANCE:{" "}
+                {balance ? (balance / LAMPORTS_PER_SOL).toFixed(4) : "0"} SOL
               </div>
               <div>
                 <LogOut

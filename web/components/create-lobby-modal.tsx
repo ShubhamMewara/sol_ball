@@ -32,7 +32,7 @@ export default function CreateLobbyModal({ onClose }: any) {
 
   const createLobbyHandler = async () => {
     if (!authenticated) {
-      await login();
+      login({ loginMethods: ["wallet"] });
       return;
     }
     const host = user?.wallet?.address || user?.id || "user";
