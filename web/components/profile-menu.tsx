@@ -7,18 +7,32 @@ import { Button } from "./ui/button";
 import { supabase } from "@/supabase/client";
 import { UserProfile } from "@/lib/types";
 import { usePrivy } from "@privy-io/react-auth";
-import { LogOut } from "lucide-react";
+import { LogOut, Trash } from "lucide-react";
 import { useAuth } from "@/store/auth";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import ChatSidebar from "./chat-sidebar";
+import { Input } from "./ui/input";
+import { toast } from "sonner";
 
 export function ProfilePage() {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
-  const [User, setUser] = useState<UserProfile | null>(null);
-  const [isFetchingStatus, setisFetchingStatus] = useState(false);
+  const [userName, setuserName] = useState<string | null>(null);
   const { authenticated, user, ready, login, logout } = usePrivy();
-  const { balance } = useAuth();
+  const { balance, user: user_profile, setUser } = useAuth();
+  const [preview, setPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [isAvatarUploading, setisAvatarUploading] = useState(false);
+  const [isSettingUsername, setisSettingUsername] = useState(false);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+
+    const imgURL = URL.createObjectURL(file);
+    setPreview(imgURL);
+  };
 
   const connectDiscord = async () => {
     await supabase.auth.signInWithOAuth({
@@ -29,15 +43,80 @@ export function ProfilePage() {
     });
   };
 
-  useEffect(() => {
-    const isLoggedIn = async () => {
-      setisFetchingStatus(true);
-      const { data, error } = await supabase.auth.getSession();
-      setUser((data.session?.user as UserProfile) ?? null);
-      setisFetchingStatus(false);
-    };
-    isLoggedIn();
-  }, []);
+  const updateUserName = async () => {
+    if (!authenticated) {
+      toast("Connect Wallet to set username");
+      return;
+    }
+    setisSettingUsername(true);
+    const { data, error } = await supabase
+      .from("profile")
+      .update({
+        username: userName,
+      })
+      .select("*")
+      .eq("wallet_key", user?.wallet?.address!)
+      .single();
+    if (data) {
+      setUser({
+        username: data.username!,
+        wallet_key: user_profile?.wallet_key!,
+        avatar_url: user_profile?.avatar_url!,
+      });
+    }
+    setisSettingUsername(false);
+    toast("Username Updated Successfully");
+  };
+
+  const updateUserAvatar = async (file: File) => {
+    if (!file) return;
+    setisAvatarUploading(true);
+    // Generate unique filename
+    const fileExt = file.name.split(".").pop();
+    const filePath = `avatar_url/${crypto.randomUUID()}.${fileExt}`;
+
+    // 1. Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("solball")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error("Upload Error:", uploadError);
+      return;
+    }
+
+    // 2. Get Public URL
+    const { data: publicUrlData } = supabase.storage
+      .from("solball")
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    // 3. Update Database user_profile.avatar_url
+    const { data, error: dbError } = await supabase
+      .from("profile")
+      .update({ avatar_url: publicUrl })
+      .eq("wallet_key", user?.wallet?.address!)
+      .select("*")
+      .single();
+
+    if (dbError) {
+      console.error("DB Update Error:", dbError);
+      return;
+    }
+    if (data) {
+      setUser({
+        username: data.username!,
+        wallet_key: user_profile?.wallet_key!,
+        avatar_url: user_profile?.avatar_url!,
+      });
+    }
+    setisAvatarUploading(false);
+    console.log("✅ Avatar updated:", publicUrl);
+  };
 
   return (
     <div className="flex gap-6 px-6 pb-8 max-w-[1800px] mx-auto">
@@ -114,32 +193,66 @@ export function ProfilePage() {
         <div className="mb-6">
           <p className="text-[#DDD9C7] text-sm mb-2">Username</p>
           <div className="  px-4 py-3 text-[#DDD9C7] flex items-center gap-2 bg-black/20 rounded-xl">
-            <div className="h-6 w-6 rounded-full ">
-              <img
-                src={User?.user_metadata.avatar_url}
-                className="h-full w-full rounded-full"
-                alt=""
-              />
-            </div>{" "}
-            {User?.user_metadata.full_name ?? "username"}
+            {user_profile?.avatar_url || preview ? (
+              <>
+                <img
+                  src={preview ?? user_profile?.avatar_url ?? ""}
+                  className="h-full w-full object-cover max-w-12 max-h-12 rounded-full"
+                  alt="avatar"
+                />
+                {user_profile?.username && user_profile?.username}
+                {!user_profile?.avatar_url && (
+                  <>
+                    <Button
+                      disabled={!avatarFile}
+                      onClick={async () => await updateUserAvatar(avatarFile!)}
+                    >
+                      {isSettingUsername ? "Updating Avatar" : " Set Avatar"}
+                    </Button>
+                    <Trash
+                      size={18}
+                      className="cursor-pointer"
+                      onClick={() => setPreview(null)}
+                    />
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="h-24 w-24 flex items-center justify-center text-[10px] text-gray-300 bg-[#1a1b24] border border-gray-600 rounded-full">
+                  <label className=" flex items-center justify-center bg-black/40 text-[10px]  hover:opacity-100 cursor-pointer transition">
+                    Upload Avatar Url
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageSelect}
+                    />
+                  </label>
+                </div>
+                {user_profile?.username && user_profile?.username}
+              </>
+            )}
           </div>
-        </div>
-
-        {/* Discord */}
-
-        <div className="mb-6">
-          <p className="text-[#DDD9C7] text-sm mb-2">Discord</p>
-          <Button
-            disabled={isFetchingStatus || User !== null}
-            className="w-full bg-[#2a2b34] rounded-lg px-4 py-6 text-[#7ACD54] font-bold hover:bg-[#3a3b44] transition-all"
-            onClick={connectDiscord}
-          >
-            {isFetchingStatus
-              ? "Fetching status.."
-              : User
-              ? "Connected"
-              : "Connect"}
-          </Button>
+          {!user_profile?.username && (
+            <div className="flex items-center justify-center gap-3">
+              <Input
+                type="text"
+                placeholder="Set Username"
+                value={userName ?? ""}
+                onChange={(e) => setuserName(e.target.value)}
+              />{" "}
+              {userName && (
+                <Button
+                  className="cursor-pointer"
+                  onClick={() => updateUserName()}
+                >
+                  {" "}
+                  {isSettingUsername ? "Updating Username" : " Set Username"}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

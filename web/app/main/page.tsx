@@ -75,10 +75,10 @@ const Page = () => {
         <ChatSidebar />
         <main className="flex-1">
           <div className="flex flex-wrap justify-between items-center gap-4">
-            <CreateLobbyModal />
             <Button variant={"outline"}>
               {balance ? (balance / LAMPORTS_PER_SOL).toFixed(4) : "0"} SOL
             </Button>
+            <CreateLobbyModal />
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">

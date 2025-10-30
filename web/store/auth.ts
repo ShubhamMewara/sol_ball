@@ -1,7 +1,12 @@
 "use client";
 import { create } from "zustand";
-import { User } from "@supabase/supabase-js";
 import { Connection } from "@solana/web3.js";
+
+interface User {
+  wallet_key: string | null;
+  username: string | null;
+  avatar_url: string | null;
+}
 
 export type AuthStore = {
   user?: User;

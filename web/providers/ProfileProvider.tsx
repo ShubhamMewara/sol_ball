@@ -9,7 +9,7 @@ import IDL from "@/compiled/solball.json";
 
 const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
   const { ready, authenticated, user } = usePrivy();
-  const { setBalance, setConnection, connection } = useAuth();
+  const { setBalance, setConnection, connection, setUser } = useAuth();
 
   useEffect(() => {
     if (!ready || !authenticated) return;
@@ -34,6 +34,22 @@ const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) toast("Error updating profile");
     };
 
+    const getProfile = async () => {
+      const { data, error } = await supabase
+        .from("profile")
+        .select("*")
+        .eq("wallet_key", user?.wallet?.address!)
+        .single();
+      if (data) {
+        setUser({
+          avatar_url: data.avatar_url,
+          username: data.username,
+          wallet_key: data.wallet_key,
+        });
+      }
+      if (error) toast("Error updating profile");
+    };
+
     const fetchBalance = async () => {
       const conn = connection ?? new Connection(clusterApiUrl("devnet"));
       const [user_sub_account] = PublicKey.findProgramAddressSync(
@@ -50,6 +66,7 @@ const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
 
     updateProfile();
     fetchBalance();
+    getProfile();
   }, [ready, authenticated]);
 
   return <>{children}</>;
