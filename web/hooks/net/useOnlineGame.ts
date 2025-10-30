@@ -33,6 +33,8 @@ export function useOnlineGame(
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const snapshotsRef = useRef<ClientSnapshot[]>([]);
   const meRef = useRef<string | null>(null);
+  const serverOffsetRef = useRef<number>(0); // clientNow - serverNow estimate
+  const offsetInitRef = useRef<boolean>(false);
   const bufferDelayMs = 120;
 
   useEffect(() => {
@@ -48,8 +50,8 @@ export function useOnlineGame(
     ctxRef.current = ctx;
 
     // Connect to PartyKit room
-  const host = getHost();
-  const socket = new PartySocket({ host, room: roomName || "default" });
+    const host = getHost();
+    const socket = new PartySocket({ host, room: roomName || "default" });
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
@@ -103,6 +105,11 @@ export function useOnlineGame(
         } else if (msg.type === "snapshot") {
           const s = msg as ClientSnapshot;
           meRef.current = s.me || meRef.current;
+          // Estimate server time offset on first snapshot
+          if (!offsetInitRef.current && typeof s.t === "number") {
+            serverOffsetRef.current = Date.now() - s.t;
+            offsetInitRef.current = true;
+          }
           // push to buffer and trim history (~2s)
           const arr = snapshotsRef.current;
           arr.push(s);
@@ -180,7 +187,7 @@ export function useOnlineGame(
       ctx.fillRect(0, 0, w, h);
       drawPitch(ctx, w, h, gh);
 
-      const target = Date.now() - bufferDelayMs;
+      const target = Date.now() - serverOffsetRef.current - bufferDelayMs;
       let drawn = false;
       if (snaps.length >= 1) {
         // Find bounding snapshots around target
