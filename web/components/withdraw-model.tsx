@@ -9,7 +9,6 @@ import {
   Connection,
   LAMPORTS_PER_SOL,
   PublicKey,
-  Transaction,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
@@ -17,7 +16,6 @@ import { useEffect, useRef, useState } from "react";
 import IDL from "../compiled/solball.json";
 import { BN, Program } from "@coral-xyz/anchor";
 import { Solball } from "@/compiled/solball";
-import { usePrivy } from "@privy-io/react-auth";
 import { useAuth } from "@/store/auth";
 import { toast } from "sonner";
 

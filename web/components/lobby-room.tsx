@@ -5,6 +5,8 @@ import { usePrivy } from "@privy-io/react-auth";
 import { joinLobby, startLobby, getLobbyIdByRoomId } from "@/lib/lobbies";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
+import { join_match } from "@/server/contract";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
 interface Player {
   name: string;
@@ -54,7 +56,7 @@ export default function LobbyWaitingModal({
   const maxPlayers = maxPlayersPerTeam * 2;
   const allSlotsFilled = totalPlayers === maxPlayers;
 
-  const goToGame = () => {
+  const goToGame = async () => {
     if (navigatedRef.current) return;
     navigatedRef.current = true;
     const mins = parseInt(String(matchDuration).replace(/[^0-9]/g, "")) || 3;
@@ -63,6 +65,12 @@ export default function LobbyWaitingModal({
       duration: String(mins),
     });
     if (selectedTeam) params.set("team", selectedTeam);
+
+    // Add Api call
+    // const pubkey = [new PublicKey("1221"), new PublicKey("12123132")];
+
+    // const isValid = await join_match(pubkey, 0.0002);
+
     params.set("teamSize", String(maxPlayersPerTeam));
     router.push(`/game/${encodeURIComponent(roomId)}?${params.toString()}`);
   };
@@ -201,7 +209,9 @@ export default function LobbyWaitingModal({
         (payload) => {
           try {
             // @ts-ignore - payload.new typing
-            const newRow = (payload as any).new as { status?: string } | undefined;
+            const newRow = (payload as any).new as
+              | { status?: string }
+              | undefined;
             if (newRow?.status === "started") {
               goToGame();
             }

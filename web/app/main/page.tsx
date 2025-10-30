@@ -2,17 +2,20 @@
 import ChatSidebar from "@/components/chat-sidebar";
 import CreateLobbyModal from "@/components/create-lobby-modal";
 import GameCard from "@/components/game-card";
+import { EmptyLobbyState } from "@/components/lobby-empty-state";
 import { Button } from "@/components/ui/button";
 import { getLobbies } from "@/lib/lobbies";
 import { useAuth } from "@/store/auth";
 import { supabase } from "@/supabase/client";
 import { Tables } from "@/supabase/database.types";
+import { usePrivy } from "@privy-io/react-auth";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useEffect, useState } from "react";
 
 const Page = () => {
   const [lobbies, setLobbies] = useState<Tables<"lobbies">[]>([]);
   const { balance } = useAuth();
+  const { authenticated } = usePrivy();
 
   useEffect(() => {
     let mounted = true;
@@ -75,27 +78,36 @@ const Page = () => {
         <ChatSidebar />
         <main className="flex-1">
           <div className="flex flex-wrap justify-between items-center gap-4">
-            <Button variant={"outline"}>
-              {balance ? (balance / LAMPORTS_PER_SOL).toFixed(4) : "0"} SOL
-            </Button>
+            {authenticated && (
+              <Button variant={"outline"}>
+                {balance
+                  ? (balance / LAMPORTS_PER_SOL).toFixed(4) + "SOL"
+                  : "0 SOL"}
+              </Button>
+            )}
             <CreateLobbyModal />
           </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-            {lobbies.map((l) => (
-              <GameCard
-                key={l.room_id}
-                stake={l.stake}
-                players={l.players}
-                blueTeam={[]}
-                redTeam={[]}
-                actionType={"join"}
-                host={l.host}
-                roomId={l.room_id}
-                matchMinutes={l.match_minutes}
-              />
-            ))}
-          </div>
+          {lobbies.length > 0 ? (
+            <div className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              {lobbies.map((l) => (
+                <GameCard
+                  key={l.room_id}
+                  stake={l.stake}
+                  players={l.players}
+                  blueTeam={[]}
+                  redTeam={[]}
+                  actionType={"join"}
+                  host={l.host}
+                  roomId={l.room_id}
+                  matchMinutes={l.match_minutes}
+                />
+              ))}
+            </div>
+          ) : (
+            <div>
+              <EmptyLobbyState />
+            </div>
+          )}
         </main>
       </div>
     </div>

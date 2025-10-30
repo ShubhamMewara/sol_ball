@@ -1,18 +1,17 @@
 import { Solball } from "@/compiled/solball";
 import { BN, Program } from "@coral-xyz/anchor";
+import { IDL } from "@coral-xyz/anchor/dist/cjs/native/system";
 import {
   clusterApiUrl,
   Connection,
   Keypair,
+  LAMPORTS_PER_SOL,
   PublicKey,
   Transaction,
 } from "@solana/web3.js";
-import { NextRequest } from "next/server";
-import IDL from "@/compiled/solball.json";
 
-export async function POST(req: NextRequest) {
+export const join_match = async (pubKeys: PublicKey[], match_fees: number) => {
   try {
-    const { pubKeys, winner_share } = await req.json();
     const connection = new Connection(clusterApiUrl("devnet"));
     const secret = JSON.parse(process.env.WALLET!);
     const walletKeypair = Keypair.fromSecretKey(Uint8Array.from(secret));
@@ -23,13 +22,17 @@ export async function POST(req: NextRequest) {
       connection: connection,
       publicKey: new PublicKey(selectedWallet.publicKey),
     });
-    const playerSubAccounts: [PublicKey] = pubKeys.map((wallet: string) => {
+    const playerSubAccounts = pubKeys.map((wallet: PublicKey) => {
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_sub_account"), new PublicKey(wallet).toBuffer()],
         new PublicKey(IDL.address)
       );
       return pda;
     });
+
+    const playerWalletKeys = pubKeys.map(
+      (key: PublicKey) => new PublicKey(key)
+    );
     const remainingAccounts = playerSubAccounts.map((pubkey) => {
       return {
         pubkey,
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
       };
     });
     const ix = await program.methods
-      .settleMatch(new BN(winner_share))
+      .joinMatch(new BN(match_fees * LAMPORTS_PER_SOL), playerWalletKeys)
       .remainingAccounts(remainingAccounts)
       .instruction();
 
@@ -55,4 +58,4 @@ export async function POST(req: NextRequest) {
 
     console.log("Transaction sent with signature:", res);
   } catch (error) {}
-}
+};
