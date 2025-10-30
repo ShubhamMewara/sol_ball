@@ -10,6 +10,12 @@ export type JoinMessage = {
   type: "join";
   name?: string;
   room?: string;
+  team?: "red" | "blue";
+  teamSize?: number;
+};
+
+export type SpectateMessage = {
+  type: "spectate";
 };
 
 export type ServerWelcome = {
@@ -37,4 +43,7 @@ export type ClientSnapshot = {
   score: { left: number; right: number };
   players: Record<string, SnapshotPlayer>;
   ball: { x: number; y: number; vx: number; vy: number };
+  phase?: "waiting" | "playing" | "ended";
+  timeLeftMs?: number;
+  winner?: "left" | "right" | "draw";
 };

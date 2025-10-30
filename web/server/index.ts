@@ -18,8 +18,10 @@ export default class Server {
   private hostWallet?: string;
   private endAtMs: number | null = null;
   private matchDurationMin = 3;
+  private pendingStart: { durationMin: number } | null = null;
   private teamByConn: Map<string, "red" | "blue"> = new Map();
   private maxPlayersPerTeam = 3;
+  private spectators: Set<string> = new Set();
 
   constructor(public room: Party.Room) {
     // Initialize world
@@ -40,26 +42,35 @@ export default class Server {
   }
 
   async onAlarm() {
-    // Step physics only if game is playing
-    if (this.phase === "playing") {
-      this.world.step(CONFIG.timeStep);
-      this.detectGoals();
-      // Check timer
-      if (this.endAtMs && Date.now() >= this.endAtMs) {
-        this.phase = "ended";
-        this.endAtMs = null;
+    try {
+      // Step physics only if game is playing
+      if (this.phase === "playing") {
+        this.world.step(CONFIG.timeStep);
+        this.detectGoals();
+        // Check timer
+        if (this.endAtMs && Date.now() >= this.endAtMs) {
+          this.phase = "ended";
+          this.endAtMs = null;
+        }
       }
-    }
 
-    // Throttle snapshot broadcasting to ~30 Hz
-    this.broadcastAccumulator += this.tickIntervalMs;
-    if (this.broadcastAccumulator >= 33) {
-      this.broadcastSnapshot();
-      this.broadcastAccumulator = 0;
+      // Throttle snapshot broadcasting to ~30 Hz
+      this.broadcastAccumulator += this.tickIntervalMs;
+      if (this.broadcastAccumulator >= 33) {
+        this.broadcastSnapshot();
+        this.broadcastAccumulator = 0;
+      }
+    } catch (e) {
+      // Keep the room alive even if a physics/frame error occurs
+      try {
+        this.room.broadcast?.(
+          JSON.stringify({ type: "error", message: String(e) })
+        );
+      } catch {}
+    } finally {
+      // Schedule next tick regardless
+      await this.room.storage.setAlarm(Date.now() + this.tickIntervalMs);
     }
-
-    // Schedule next tick
-    await this.room.storage.setAlarm(Date.now() + this.tickIntervalMs);
   }
 
   onConnect(conn: any, _ctx?: any) {
@@ -89,10 +100,38 @@ export default class Server {
         if (Number.isFinite(teamSize) && teamSize > 0) {
           this.maxPlayersPerTeam = Math.floor(teamSize);
         }
+        // If previously marked spectator, unmark
+        this.spectators.delete(sender.id);
         const assigned = this.assignTeam(sender.id, preferred);
         this.teamByConn.set(sender.id, assigned);
+        // Ensure a player body exists
+        if (!this.players.has(sender.id)) {
+          const body = createPlayer(this.world, CONFIG.playerRadiusPx);
+          this.players.set(sender.id, body);
+        }
         // Place the player at a spawn
         this.placePlayerAtSpawn(sender.id);
+        // If a start was requested earlier but teams weren't ready, try starting now
+        if (
+          this.pendingStart &&
+          this.phase !== "playing" &&
+          this.countTeam("red") >= 1 &&
+          this.countTeam("blue") >= 1
+        ) {
+          this.startMatch(this.pendingStart.durationMin);
+          this.pendingStart = null;
+        }
+        return;
+      }
+      if (msg.type === "spectate") {
+        // Convert this connection to spectator: remove any player body and team mapping
+        const b = this.players.get(sender.id);
+        if (b) {
+          this.world.destroyBody(b);
+          this.players.delete(sender.id);
+        }
+        this.teamByConn.delete(sender.id);
+        this.spectators.add(sender.id);
         return;
       }
       if (msg.type === "claim-host") {
@@ -110,7 +149,13 @@ export default class Server {
         if (this.phase === "playing") return;
         const durationMin = Number(msg.durationMin) || this.matchDurationMin;
         this.matchDurationMin = durationMin;
-        this.startMatch(durationMin);
+        // If teams are ready, start now; otherwise remember to start when ready
+        if (this.countTeam("red") >= 1 && this.countTeam("blue") >= 1) {
+          this.startMatch(durationMin);
+          this.pendingStart = null;
+        } else {
+          this.pendingStart = { durationMin };
+        }
       } else if (msg.type === "inputs") {
         const keys = msg.keys || {};
         const actor = this.players.get(sender.id);
@@ -137,6 +182,23 @@ export default class Server {
     const b = this.players.get(conn.id);
     if (b) this.world.destroyBody(b);
     this.players.delete(conn.id);
+    this.teamByConn.delete(conn.id);
+    this.spectators.delete(conn.id);
+    if (!this.hostWallet && this.hostConnId === conn.id) {
+      // reassign hostConnId to another active connection if any
+      let nextId: string | null = null;
+      for (const c of this.room.getConnections()) {
+        if (c.id !== conn.id) {
+          nextId = c.id;
+          break;
+        }
+      }
+      this.hostConnId = nextId;
+    }
+    // If no players remain, DO NOT reset the match state. Keep score/time/phase.
+    // Clients may briefly reconnect; resetting here causes unwanted resets mid-match.
+    // Optionally, we could pause physics until a player returns, but onAlarm already
+    // steps only while phase === "playing". So it's safe to leave state as-is.
   }
 
   detectGoals() {
@@ -146,14 +208,15 @@ export default class Server {
     const ypx = pos.y * SCALE;
     const inBand =
       ypx > H / 2 - goalHeightPx / 2 && ypx < H / 2 + goalHeightPx / 2;
-    if (inBand) {
-      if (xpx < 0) {
-        this.score.left += 1;
-        this.resetPositions();
-      } else if (xpx > W) {
-        this.score.right += 1;
-        this.resetPositions();
-      }
+    if (!inBand) return;
+    // Small safety margin to avoid floating point flicker
+    const margin = 1;
+    if (xpx < -margin) {
+      this.score.left += 1;
+      this.resetPositions();
+    } else if (xpx > W + margin) {
+      this.score.right += 1;
+      this.resetPositions();
     }
   }
 

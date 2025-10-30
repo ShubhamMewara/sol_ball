@@ -5,6 +5,7 @@ import { slugify } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 import { createLobby } from "@/lib/lobbies";
+import LobbyWaitingModal from "@/components/lobby-room";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,8 @@ export default function CreateLobbyModal() {
   const [players, setPlayers] = useState(3);
   const [minutes, setMinutes] = useState(3);
   const [open, setOpen] = useState(false);
+  const [waitingOpen, setWaitingOpen] = useState(false);
+  const [roomId, setRoomId] = useState<string | null>(null);
 
   const handlePrizePotChange = (amount: number) => {
     const next = Math.max(0.001, +(prizePot + amount).toFixed(3));
@@ -53,7 +56,8 @@ export default function CreateLobbyModal() {
       });
       toast("Lobby Created Successfully!");
       setOpen(false);
-      router.push(`/game/${encodeURIComponent(id)}`);
+      setRoomId(id);
+      setWaitingOpen(true);
     } catch (e: any) {
       console.error(e);
       toast("Failed to create lobby");
@@ -61,7 +65,8 @@ export default function CreateLobbyModal() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="bg-[#7ACD54] text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all shadow-[4px_4px_0_0_#65ab44]">
         CREATE A LOBBY
       </DialogTrigger>
@@ -130,7 +135,7 @@ export default function CreateLobbyModal() {
               onClick={() => handlePlayersChange(-1)}
               className="w-12 h-12 bg-[#FF4444] text-white rounded-lg font-bold hover:bg-[#FF2222] transition-all"
             >
-              −
+              -
             </button>
           </div>
         </div>
@@ -151,7 +156,7 @@ export default function CreateLobbyModal() {
               onClick={() => handleMinutesChange(-1)}
               className="w-12 h-12 bg-[#FF4444] text-white rounded-lg font-bold hover:bg-[#FF2222] transition-all"
             >
-              −
+              -
             </button>
           </div>
         </div>
@@ -172,6 +177,20 @@ export default function CreateLobbyModal() {
           </button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      {waitingOpen && roomId && (
+        <LobbyWaitingModal
+          onClose={() => setWaitingOpen(false)}
+          prizePot={+prizePot.toFixed(3)}
+          maxPlayersPerTeam={players}
+          matchDuration={`${minutes} min`}
+          isHost={true}
+          existingPlayers={{ redTeam: [], blueTeam: [] }}
+          hostName={(user?.wallet?.address || user?.id || "user").slice(0, 6)}
+          roomId={roomId}
+        />
+      )}
+    </>
   );
 }

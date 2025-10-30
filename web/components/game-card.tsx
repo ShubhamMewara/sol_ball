@@ -4,6 +4,7 @@ import { useState } from "react";
 import LobbyWaitingModal from "./lobby-room";
 import { slugify } from "@/lib/utils";
 import { usePrivy } from "@privy-io/react-auth";
+import { useRouter } from "next/navigation";
 
 interface GameCardProps {
   stake: number;
@@ -32,6 +33,7 @@ export default function GameCard({
   const myId = user?.wallet?.address || user?.id || "";
   const isHost = myId && host && myId === host;
   const durationLabel = matchMinutes ? `${matchMinutes}m` : "";
+  const router = useRouter();
 
   return (
     <div className="border-b-4 border-[#7ACD54] rounded-lg bg-[#1a1b24] p-6 flex flex-col justify-between min-h-64 shadow-lg shadow-[#7ACD54]/10">
@@ -81,7 +83,14 @@ export default function GameCard({
 
       {/* Action Button */}
       <button
-        onClick={() => actionType === "join" && setisLobbyModalOpen(true)}
+        onClick={() => {
+          if (actionType === "join") {
+            setisLobbyModalOpen(true);
+          } else {
+            // Spectate goes straight to the room without selecting a team
+            router.push(`/game/${encodeURIComponent(derivedRoom)}`);
+          }
+        }}
         className={`w-full py-3 rounded-full font-bold text-lg transition-all shadow-[4px_4px_0_0_#65ab44] ${
           actionType === "spectate"
             ? "bg-[#FFD700] text-white hover:bg-[#FFC700] shadow-[#FFD700]/30"

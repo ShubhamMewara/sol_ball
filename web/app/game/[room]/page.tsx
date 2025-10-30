@@ -1,5 +1,13 @@
 import PlanckGame from "@/components/game";
 
-export default function GameRoom({ params }: { params: { room: string } }) {
-  return <PlanckGame room={params.room} />;
+export default async function GameRoom({
+  params,
+}: {
+  params: Promise<{
+    room: string;
+  }>;
+}) {
+  const { room } = await params;
+
+  return <PlanckGame room={room} />;
 }

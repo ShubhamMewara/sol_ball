@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { usePrivy } from "@privy-io/react-auth";
-import { joinLobby } from "@/lib/lobbies";
+import { joinLobby, startLobby, getLobbyIdByRoomId } from "@/lib/lobbies";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
 
@@ -38,26 +38,47 @@ export default function LobbyWaitingModal({
   const { user } = usePrivy();
   const router = useRouter();
   const [selectedTeam, setSelectedTeam] = useState<"red" | "blue" | null>(null);
-  const [redTeam, setRedTeam] = useState<Player[]>(existingPlayers?.redTeam || []);
-  const [blueTeam, setBlueTeam] = useState<Player[]>(existingPlayers?.blueTeam || []);
-
-  const myId = useMemo(
-    () => user?.wallet?.address || user?.id || "",
-    [user]
+  const [redTeam, setRedTeam] = useState<Player[]>(
+    existingPlayers?.redTeam || []
   );
+  const [blueTeam, setBlueTeam] = useState<Player[]>(
+    existingPlayers?.blueTeam || []
+  );
+  const navigatedRef = useRef(false);
+  const [lobbyUuid, setLobbyUuid] = useState<string | null>(null);
+
+  const myId = useMemo(() => user?.wallet?.address || user?.id || "", [user]);
   // myId label not needed in UI; we render truncated labels from DB entries
 
   const totalPlayers = redTeam.length + blueTeam.length;
   const maxPlayers = maxPlayersPerTeam * 2;
   const allSlotsFilled = totalPlayers === maxPlayers;
 
-  const handleStartMatch = () => {
-    if (totalPlayers < 2) return; // require at least 2 players
+  const goToGame = () => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
     const mins = parseInt(String(matchDuration).replace(/[^0-9]/g, "")) || 3;
-    const params = new URLSearchParams({ start: "1", duration: String(mins) });
+    const params = new URLSearchParams({
+      start: isHost ? "1" : "0",
+      duration: String(mins),
+    });
     if (selectedTeam) params.set("team", selectedTeam);
     params.set("teamSize", String(maxPlayersPerTeam));
     router.push(`/game/${encodeURIComponent(roomId)}?${params.toString()}`);
+  };
+
+  const handleStartMatch = async () => {
+    if (totalPlayers < 2) return; // require at least 2 players
+    console.log("Starting lobby:", roomId);
+    try {
+      await startLobby(roomId);
+      console.log("Lobby started successfully");
+    } catch (e) {
+      // ignore; subscription below will still navigate if update succeeded server-side
+      console.error(e);
+    }
+    goToGame();
+    console.log("Navigating to game...");
   };
 
   const handleJoin = () => {
@@ -75,7 +96,9 @@ export default function LobbyWaitingModal({
       // Check capacity client-side
       if (team === "red" && redTeam.length >= maxPlayersPerTeam) return;
       if (team === "blue" && blueTeam.length >= maxPlayersPerTeam) return;
-      joinLobby(roomId, uid, team).catch(() => {});
+      if (lobbyUuid) {
+        joinLobby(lobbyUuid, uid, team).catch(() => {});
+      }
     } catch {}
     // UI will sync from realtime subscription below
   };
@@ -84,23 +107,42 @@ export default function LobbyWaitingModal({
   const redSlots = Array(maxPlayersPerTeam).fill(null);
   const blueSlots = Array(maxPlayersPerTeam).fill(null);
 
-  // Load and subscribe to lobby members for this room
+  // Resolve lobby UUID from room slug
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const id = await getLobbyIdByRoomId(roomId);
+        if (!cancelled) setLobbyUuid(id);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setLobbyUuid(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
+
+  // Load and subscribe to lobby members for this room (by lobby UUID)
   useEffect(() => {
     let active = true;
+    if (!lobbyUuid) return;
     const refresh = async () => {
       try {
         const { data, error } = await supabase
           .from("lobby_members")
           .select("user_id, team")
-          .eq("lobby_room_id", roomId);
+          .eq("lobby_room_id", lobbyUuid);
         if (error) throw error;
         if (!active) return;
         const red: Player[] = [];
         const blue: Player[] = [];
         for (const row of data || []) {
-          const label = row.user_id.length > 10
-            ? `${row.user_id.slice(0, 4)}…${row.user_id.slice(-4)}`
-            : row.user_id;
+          const label =
+            row.user_id.length > 10
+              ? `${row.user_id.slice(0, 4)}…${row.user_id.slice(-4)}`
+              : row.user_id;
           const p: Player = {
             name: label,
             isCurrentUser: row.user_id === myId,
@@ -130,7 +172,7 @@ export default function LobbyWaitingModal({
           event: "*",
           schema: "public",
           table: "lobby_members",
-          filter: `lobby_room_id=eq.${roomId}`,
+          filter: `lobby_room_id=eq.${lobbyUuid}`,
         },
         () => refresh()
       )
@@ -142,7 +184,38 @@ export default function LobbyWaitingModal({
         supabase.removeChannel(channel);
       } catch {}
     };
-  }, [roomId, myId, maxPlayersPerTeam]);
+  }, [roomId, lobbyUuid, myId, maxPlayersPerTeam]);
+
+  // Subscribe to lobby status changes to auto-start for all users when host starts
+  useEffect(() => {
+    const channel = supabase
+      .channel(`lobby-status-${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "lobbies",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          try {
+            // @ts-ignore - payload.new typing
+            const newRow = (payload as any).new as { status?: string } | undefined;
+            if (newRow?.status === "started") {
+              goToGame();
+            }
+          } catch {}
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
+  }, [roomId, matchDuration, maxPlayersPerTeam, selectedTeam]);
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fadeIn">
@@ -184,7 +257,11 @@ export default function LobbyWaitingModal({
               className={`w-full py-3 rounded-full font-bold text-lg mb-4 transition-all shadow-lg ${
                 selectedTeam === "red"
                   ? "bg-[#FF6B6B] text-white shadow-[#FF6B6B]/40 scale-105"
-                  : `bg-[#FF6B6B]/80 text-white ${redTeam.length >= maxPlayersPerTeam ? "opacity-50 cursor-not-allowed" : "hover:bg-[#FF6B6B]"} shadow-[#FF6B6B]/20`
+                  : `bg-[#FF6B6B]/80 text-white ${
+                      redTeam.length >= maxPlayersPerTeam
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:bg-[#FF6B6B]"
+                    } shadow-[#FF6B6B]/20`
               }`}
             >
               RED
@@ -229,7 +306,11 @@ export default function LobbyWaitingModal({
               className={`w-full py-3 rounded-full font-bold text-lg mb-4 transition-all shadow-lg ${
                 selectedTeam === "blue"
                   ? "bg-[#4FC3F7] text-white shadow-[#4FC3F7]/40 scale-105"
-                  : `bg-[#4FC3F7]/80 text-white ${blueTeam.length >= maxPlayersPerTeam ? "opacity-50 cursor-not-allowed" : "hover:bg-[#4FC3F7]"} shadow-[#4FC3F7]/20`
+                  : `bg-[#4FC3F7]/80 text-white ${
+                      blueTeam.length >= maxPlayersPerTeam
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:bg-[#4FC3F7]"
+                    } shadow-[#4FC3F7]/20`
               }`}
             >
               BLUE
@@ -266,7 +347,7 @@ export default function LobbyWaitingModal({
           {isHost && (
             <button
               onClick={handleStartMatch}
-              disabled={totalPlayers < 2}
+              disabled={redTeam.length < 1 || blueTeam.length < 1}
               className="px-8 py-4 rounded-full font-bold text-lg bg-[#7ACD54] text-white hover:bg-[#6BBD44] transition-all shadow-lg shadow-[#7ACD54]/30"
             >
               START MATCH

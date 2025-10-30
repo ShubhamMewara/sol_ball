@@ -53,14 +53,25 @@ export function useOnlineGame(
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
-      socket.send(
-        JSON.stringify({
-          type: "join",
-          name: "player",
-          team: opts.joinTeam,
-          teamSize: opts.teamSize,
-        })
-      );
+      // If a team is provided we are joining as a player; otherwise auto-join and let server assign team
+      if (opts.joinTeam) {
+        socket.send(
+          JSON.stringify({
+            type: "join",
+            name: "player",
+            team: opts.joinTeam,
+            teamSize: opts.teamSize,
+          })
+        );
+      } else {
+        socket.send(
+          JSON.stringify({
+            type: "join",
+            name: "player",
+            teamSize: opts.teamSize,
+          })
+        );
+      }
       // Attempt to claim host if requested
       if (opts.claimHostWallet) {
         socket.send(
