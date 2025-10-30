@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, Suspense } from "react";
 import { usePlanckWorld } from "../hooks/usePlanckWorld";
 import { useInput } from "../hooks/useInput";
 import { useGameLoop } from "../hooks/useGameLoop";
@@ -12,9 +12,6 @@ import { Button } from "./ui/button";
 
 export default function PlanckGame({ room }: { room?: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  // Simple toggle to switch between Local and Online play
-  const [online, setOnline] = useState(true);
 
   // Select primitives separately to avoid React 19 SSR getServerSnapshot caching warning
   const scoreLeft = useGameStore((s) => s.scoreLeft);
@@ -42,13 +39,6 @@ export default function PlanckGame({ room }: { room?: string }) {
     return null;
   }
 
-  function LocalGame() {
-    const { worldRef, bodiesRef, ctxRef } = usePlanckWorld(canvasRef);
-    useInput(bodiesRef);
-    useGameLoop(worldRef, bodiesRef, ctxRef);
-    return null;
-  }
-
   return (
     <div className="min-h-[83vh] w-full flex flex-col">
       {/* Centered Game Stage */}
@@ -73,7 +63,9 @@ export default function PlanckGame({ room }: { room?: string }) {
               </div>
             </div>
           </div>
-          {online ? <OnlineGame /> : <LocalGame />}
+          <Suspense fallback={<div>Loading...</div>}>
+            <OnlineGame />
+          </Suspense>
           <GameOverOverlay />
         </div>
       </main>
