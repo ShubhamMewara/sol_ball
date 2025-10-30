@@ -11,8 +11,9 @@ export default class Server {
   players: Map<string, planck.Body> = new Map();
   ball: planck.Body;
   score = { left: 0, right: 0 };
-  private readonly tickIntervalMs = 16; // ~60 Hz
-  private broadcastAccumulator = 0;
+  private lastTickMs = Date.now();
+  private physicsAccumMs = 0;
+  private broadcastAccumMs = 0; // throttle broadcast to ~30 Hz
   private phase: "waiting" | "playing" | "ended" = "waiting";
   private hostConnId: string | null = null;
   private hostWallet?: string;
@@ -28,48 +29,42 @@ export default class Server {
     this.world = createWorld();
     createWalls(this.world, CONFIG.W, CONFIG.H, CONFIG.goalHeightPx);
     this.ball = createBall(this.world, CONFIG.ballRadiusPx);
-
-    // Ensure the tick loop starts even if onStart isn't invoked by the platform version
-    // (safe to call multiple times; later calls will just reschedule)
-    this.room.storage
-      .setAlarm(Date.now() + this.tickIntervalMs)
-      .catch(() => {});
+    // Drive simulation off inbound inputs; no server-side interval required
   }
 
   async onStart() {
-    // Schedule the first alarm tick
-    await this.room.storage.setAlarm(Date.now() + this.tickIntervalMs);
+    // No-op; we advance simulation on incoming inputs
   }
 
-  async onAlarm() {
-    try {
-      // Step physics only if game is playing
-      if (this.phase === "playing") {
-        this.world.step(CONFIG.timeStep);
-        this.detectGoals();
-        // Check timer
-        if (this.endAtMs && Date.now() >= this.endAtMs) {
-          this.phase = "ended";
-          this.endAtMs = null;
-        }
-      }
+  private stepAndMaybeBroadcast(deltaMs: number) {
+    // Clamp to avoid spiral of death on stalls
+    if (deltaMs > 100) deltaMs = 100;
+    const now = Date.now();
 
-      // Throttle snapshot broadcasting to ~30 Hz
-      this.broadcastAccumulator += this.tickIntervalMs;
-      if (this.broadcastAccumulator >= 33) {
-        this.broadcastSnapshot();
-        this.broadcastAccumulator = 0;
+    if (this.phase === "playing") {
+      // Fixed-step physics at CONFIG.timeStep using an accumulator
+      this.physicsAccumMs += deltaMs;
+      const stepMs = CONFIG.timeStep * 1000; // fixed physics step duration in ms
+      while (this.physicsAccumMs >= stepMs) {
+        this.world.step(CONFIG.timeStep);
+        this.physicsAccumMs -= stepMs;
       }
-    } catch (e) {
-      // Keep the room alive even if a physics/frame error occurs
-      try {
-        this.room.broadcast?.(
-          JSON.stringify({ type: "error", message: String(e) })
-        );
-      } catch {}
-    } finally {
-      // Schedule next tick regardless
-      await this.room.storage.setAlarm(Date.now() + this.tickIntervalMs);
+      this.detectGoals();
+      // Match timer
+      if (this.endAtMs && now >= this.endAtMs) {
+        this.phase = "ended";
+        this.endAtMs = null;
+      }
+    } else {
+      // Not playing; don't let accumulator grow unbounded
+      this.physicsAccumMs = 0;
+    }
+
+    // Broadcast snapshots at ~30 Hz
+    this.broadcastAccumMs += deltaMs;
+    if (this.broadcastAccumMs >= 33) {
+      this.broadcastSnapshot();
+      this.broadcastAccumMs = 0;
     }
   }
 
@@ -172,6 +167,13 @@ export default class Server {
         if (msg.actions?.kick) {
           kick(actor, this.ball, CONFIG.playerRadiusPx, CONFIG.ballRadiusPx);
         }
+
+        // Advance simulation based on elapsed time since last tick
+        const now = Date.now();
+        let deltaMs = now - this.lastTickMs;
+        if (deltaMs < 0) deltaMs = 0;
+        this.lastTickMs = now;
+        this.stepAndMaybeBroadcast(deltaMs);
       }
     } catch {
       // ignore malformed messages
@@ -282,6 +284,11 @@ export default class Server {
     this.resetPositions();
     this.phase = "playing";
     this.endAtMs = Date.now() + Math.max(1, durationMin) * 60 * 1000;
+    // Reset timers/accumulators and send an immediate snapshot
+    this.lastTickMs = Date.now();
+    this.physicsAccumMs = 0;
+    this.broadcastAccumMs = 0;
+    this.broadcastSnapshot();
   }
 
   private assignTeam(id: string, preferred?: "red" | "blue"): "red" | "blue" {

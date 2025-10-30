@@ -1,14 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect, Suspense } from "react";
-import { usePlanckWorld } from "../hooks/usePlanckWorld";
-import { useInput } from "../hooks/useInput";
-import { useGameLoop } from "../hooks/useGameLoop";
-import { useGameStore } from "../store/gameStore";
-import { useOnlineGame } from "../hooks/net/useOnlineGame";
-import { useSearchParams } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
-import { Button } from "./ui/button";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef } from "react";
+import { useOnlineGame } from "../hooks/net/useOnlineGame";
+import { useGameStore } from "../store/gameStore";
 
 export default function PlanckGame({ room }: { room?: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
