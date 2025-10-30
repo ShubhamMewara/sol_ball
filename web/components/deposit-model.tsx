@@ -17,6 +17,8 @@ import {
   useSignAndSendTransaction,
   useWallets,
 } from "@privy-io/react-auth/solana";
+import { toast } from "sonner";
+import { useAuth } from "@/store/auth";
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -28,7 +30,9 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
   const modalContentRef = useRef(null);
   const wallet = usePrivy();
   const { wallets, ready } = useWallets();
+  const { balance, setBalance } = useAuth();
   const { signAndSendTransaction } = useSignAndSendTransaction();
+  const [isConfirming, setisConfirming] = useState(false);
 
   useEffect(() => {
     const handleClickOutside = (event: any) => {
@@ -52,45 +56,57 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
 
   const confirmDeposit = async () => {
     const connection = new Connection(clusterApiUrl("devnet"));
-    // replace with hook
     const selectedWallet = wallets[0];
+    try {
+      setisConfirming(true);
+      const [user_sub_account] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("user_sub_account"),
+          new PublicKey(selectedWallet.address).toBuffer(),
+        ],
+        new PublicKey(IDL.address)
+      );
+      const balance = await connection.getBalance(user_sub_account);
+      console.log(balance);
+      const program: Program<Solball> = new Program(IDL, {
+        connection: connection,
+        publicKey: new PublicKey(selectedWallet.address!),
+      });
+      const ix = await program.methods
+        .deposit(new BN(Number(amount) * LAMPORTS_PER_SOL))
+        .instruction();
 
-    const [user_sub_account] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user_sub_account"),
-        new PublicKey(selectedWallet.address).toBuffer(),
-      ],
-      new PublicKey(IDL.address)
-    );
-    const balance = await connection.getBalance(user_sub_account);
-    console.log(balance);
-    const program: Program<Solball> = new Program(IDL, {
-      connection: connection,
-      publicKey: new PublicKey(selectedWallet.address!),
-    });
-    const ix = await program.methods
-      .deposit(new BN(Number(amount) * LAMPORTS_PER_SOL))
-      .instruction();
+      const bx = await connection.getLatestBlockhash();
+      if (!ix.programId)
+        throw new Error("❌ programId missing from instruction");
 
-    const bx = await connection.getLatestBlockhash();
-    if (!ix.programId) throw new Error("❌ programId missing from instruction");
+      const msg = new TransactionMessage({
+        payerKey: new PublicKey(selectedWallet.address!),
+        recentBlockhash: bx.blockhash,
+        instructions: [ix],
+      }).compileToV0Message();
 
-    const msg = new TransactionMessage({
-      payerKey: new PublicKey(selectedWallet.address!),
-      recentBlockhash: bx.blockhash,
-      instructions: [ix],
-    }).compileToV0Message();
-
-    const versionedTx = new VersionedTransaction(msg);
-    // Send the transaction
-    const result = await signAndSendTransaction({
-      transaction: versionedTx.serialize(),
-      wallet: selectedWallet,
-    });
-    console.log(
-      "Transaction sent with signature:",
-      result.signature.toString()
-    );
+      const versionedTx = new VersionedTransaction(msg);
+      // Send the transaction
+      const result = await signAndSendTransaction({
+        transaction: versionedTx.serialize(),
+        wallet: selectedWallet,
+      });
+      console.log(
+        "Transaction sent with signature:",
+        result.signature.toString()
+      );
+      setisConfirming(false);
+      const addedBalance = Number(
+        (Number(amount) * LAMPORTS_PER_SOL).toFixed(4)
+      );
+      setBalance(balance + addedBalance);
+      toast("Successfully Deposited SOL");
+      onClose();
+    } catch (error) {
+      setisConfirming(false);
+      toast("Something went wrong");
+    }
   };
 
   return (
@@ -139,22 +155,26 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Enter amount"
+            step={0.0001}
             className="w-full bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] placeholder-[#666] focus:outline-none focus:ring-2 focus:ring-[#7ACD54]"
           />
         </div>
 
         {/* Info */}
-        <div className="mb-8 bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] text-sm">
-          <p className="mb-2">Wallet: {wallet.user?.wallet?.address} </p>
+        <div className="mb-8 bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] text-sm overflow-hidden flex">
+          <div className="mb-2">
+            Wallet: <span>{wallet.user?.wallet?.address}</span>{" "}
+          </div>
         </div>
 
         {/* Buttons */}
         <div className="space-y-3">
           <button
-            className="w-full bg-[#7ACD54] text-[#14151C] py-3 rounded-lg font-bold hover:bg-[#6ab844] transition-all shadow-lg shadow-[#7ACD54]/30"
+            className="w-full bg-[#7ACD54] text-[#14151C] py-3 rounded-lg font-bold hover:bg-[#6ab844] transition-all shadow-lg cursor-pointer shadow-[#7ACD54]/30"
             onClick={confirmDeposit}
+            disabled={isConfirming}
           >
-            CONFIRM DEPOSIT
+            {isConfirming ? "DEPOSTING..." : "CONFIRM DEPOSIT"}
           </button>
           <button
             onClick={onClose}

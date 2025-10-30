@@ -19,6 +19,7 @@ import { BN, Program } from "@coral-xyz/anchor";
 import { Solball } from "@/compiled/solball";
 import { usePrivy } from "@privy-io/react-auth";
 import { useAuth } from "@/store/auth";
+import { toast } from "sonner";
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -28,7 +29,9 @@ interface WithdrawModalProps {
 export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
   const [amount, setAmount] = useState("");
   const { wallets, ready } = useWallets();
-  const { balance } = useAuth();
+  const { balance, setBalance } = useAuth();
+  const [isConfirming, setisConfirming] = useState(false);
+
   const modalContentRef = useRef(null);
   const { signAndSendTransaction } = useSignAndSendTransaction();
 
@@ -57,44 +60,62 @@ export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
     const connection = new Connection(clusterApiUrl("devnet"));
     // replace with hook
     const selectedWallet = wallets[0];
+    try {
+      setisConfirming(true);
+      const [user_sub_account] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("user_sub_account"),
+          new PublicKey(selectedWallet.address).toBuffer(),
+        ],
+        new PublicKey(IDL.address)
+      );
+      const balance = await connection.getBalance(user_sub_account);
+      console.log(balance);
+      if (balance < Number(amount) * LAMPORTS_PER_SOL) {
+        toast("Cannot withdraw more than available balance");
+        setisConfirming(false);
+        return;
+      }
+      const program: Program<Solball> = new Program(IDL, {
+        connection: connection,
+        publicKey: new PublicKey(selectedWallet.address!),
+      });
+      const ix = await program.methods
+        .withdraw(new BN(Number(amount) * LAMPORTS_PER_SOL))
+        .instruction();
 
-    const [user_sub_account] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("user_sub_account"),
-        new PublicKey(selectedWallet.address).toBuffer(),
-      ],
-      new PublicKey(IDL.address)
-    );
-    const balance = await connection.getBalance(user_sub_account);
-    console.log(balance);
-    const program: Program<Solball> = new Program(IDL, {
-      connection: connection,
-      publicKey: new PublicKey(selectedWallet.address!),
-    });
-    const ix = await program.methods
-      .withdraw(new BN(Number(amount) * LAMPORTS_PER_SOL))
-      .instruction();
+      const bx = await connection.getLatestBlockhash();
 
-    const bx = await connection.getLatestBlockhash();
+      if (!ix.programId)
+        throw new Error("❌ programId missing from instruction");
 
-    if (!ix.programId) throw new Error("❌ programId missing from instruction");
+      const msg = new TransactionMessage({
+        payerKey: new PublicKey(selectedWallet.address!),
+        recentBlockhash: bx.blockhash,
+        instructions: [ix],
+      }).compileToV0Message();
 
-    const msg = new TransactionMessage({
-      payerKey: new PublicKey(selectedWallet.address!),
-      recentBlockhash: bx.blockhash,
-      instructions: [ix],
-    }).compileToV0Message();
-
-    const versionedTx = new VersionedTransaction(msg);
-    // Send the transaction
-    const result = await signAndSendTransaction({
-      transaction: versionedTx.serialize(),
-      wallet: selectedWallet,
-    });
-    console.log(
-      "Transaction sent with signature:",
-      result.signature.toString()
-    );
+      const versionedTx = new VersionedTransaction(msg);
+      // Send the transaction
+      const result = await signAndSendTransaction({
+        transaction: versionedTx.serialize(),
+        wallet: selectedWallet,
+      });
+      console.log(
+        "Transaction sent with signature:",
+        result.signature.toString()
+      );
+      const addedBalance = Number(
+        (Number(amount) * LAMPORTS_PER_SOL).toFixed(4)
+      );
+      setBalance(balance - addedBalance);
+      setisConfirming(false);
+      onClose();
+      toast("Successfully Withdrawn SOL");
+    } catch (error) {
+      setisConfirming(false);
+      toast("Something went wrong");
+    }
   };
 
   return (
@@ -142,6 +163,7 @@ export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            step={0.0001}
             placeholder="Enter amount"
             className="w-full bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] placeholder-[#666] focus:outline-none focus:ring-2 focus:ring-[#FF6B6B]"
           />
@@ -160,9 +182,10 @@ export default function WithdrawModal({ isOpen, onClose }: WithdrawModalProps) {
         <div className="space-y-3">
           <button
             className="w-full bg-[#FF6B6B] text-white py-3 rounded-lg font-bold hover:bg-[#ff5252] transition-all shadow-lg shadow-[#FF6B6B]/30"
+            disabled={isConfirming}
             onClick={withdrawFunds}
           >
-            CONFIRM WITHDRAW
+            {isConfirming ? "WITHDRAWING..." : " CONFIRM WITHDRAW"}
           </button>
           <button
             onClick={onClose}

@@ -4,6 +4,7 @@ import PrivvyProvider from "../providers/PrivyProvider";
 import { DynaPuff } from "next/font/google";
 import { NavTabs } from "@/components/NavTabs";
 import ProfileProvider from "@/providers/ProfileProvider";
+import { Toaster } from "sonner";
 
 const dynapuff = DynaPuff({
   subsets: ["latin"], // adjust subsets if needed
@@ -74,6 +75,7 @@ export default function RootLayout({
           <ProfileProvider>
             <NavTabs />
             {children}
+            <Toaster />
           </ProfileProvider>
         </PrivvyProvider>
       </body>

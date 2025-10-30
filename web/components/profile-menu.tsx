@@ -142,13 +142,10 @@ export function ProfilePage() {
           </div>
         ) : (
           <>
-            <div className="mb-8">
+            <div className="mb-8 overflow-hidden">
               <p className="text-[#DDD9C7] text-sm mb-2">Wallet address</p>
-              <div
-                className="bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] text-sm break-all select-none"
-                aria-readonly
-              >
-                {authenticated && user?.wallet?.address}
+              <div className="bg-[#2a2b34] rounded-lg px-4 py-3 text-[#DDD9C7] text-sm break-all select-none overflow-hidden">
+                {authenticated && user?.wallet?.address.slice(0, 20)}
               </div>
             </div>
 
