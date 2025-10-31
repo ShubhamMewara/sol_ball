@@ -77,7 +77,7 @@ const Page = () => {
       <div className="relative flex flex-col gap-6 lg:flex-row">
         <ChatSidebar />
         <main className="flex-1">
-          <div className="flex flex-wrap justify-between items-center gap-4">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-2">
             {authenticated && (
               <Button variant={"outline"}>
                 {balance
