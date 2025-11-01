@@ -15,6 +15,8 @@ export type AuthStore = {
   setBalance: (balance: number) => void;
   connection: Connection | null;
   setConnection: (connection: Connection) => void;
+  toggleChat: boolean;
+  settoggleChat: (chat: boolean) => void;
 };
 
 export const useAuth = create<AuthStore>((set, get) => ({
@@ -24,4 +26,6 @@ export const useAuth = create<AuthStore>((set, get) => ({
   setBalance: (balance: number) => set({ balance }),
   connection: null,
   setConnection: (connection: Connection) => set({ connection: connection }),
+  toggleChat: false,
+  settoggleChat: (chat: boolean) => set({ toggleChat: chat }),
 }));
