@@ -23,6 +23,8 @@ export default class Server {
   private teamByConn: Map<string, "red" | "blue"> = new Map();
   private maxPlayersPerTeam = 3;
   private spectators: Set<string> = new Set();
+  private startWebhookSent = false;
+  private endWebhookSent = false;
 
   constructor(public room: Party.Room) {
     // Initialize world
@@ -54,6 +56,31 @@ export default class Server {
       if (this.endAtMs && now >= this.endAtMs) {
         this.phase = "ended";
         this.endAtMs = null;
+        // Fire settle webhook once
+        if (!this.endWebhookSent) {
+          this.endWebhookSent = true;
+          const winner =
+            this.score.left === this.score.right
+              ? null
+              : this.score.left > this.score.right
+              ? "left"
+              : "right";
+          const map: any = { left: "red", right: "blue" };
+          const winnerTeam = winner ? map[winner] : null;
+          const base =
+            process?.env?.MATCH_WEBHOOK_BASE_URL ||
+            "https://solball.vercel.app";
+          if (base && winnerTeam) {
+            fetch(`${base.replace(/\/$/, "")}/api/match/settle`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                roomId: this.room.id,
+                winner: winnerTeam,
+              }),
+            }).catch(() => {});
+          }
+        }
       }
     } else {
       // Not playing; don't let accumulator grow unbounded
@@ -289,6 +316,20 @@ export default class Server {
     this.physicsAccumMs = 0;
     this.broadcastAccumMs = 0;
     this.broadcastSnapshot();
+    this.endWebhookSent = false;
+    // Fire start webhook once per match
+    if (!this.startWebhookSent) {
+      this.startWebhookSent = true;
+      const base =
+        process?.env?.MATCH_WEBHOOK_BASE_URL || "https://solball.vercel.app";
+      if (base) {
+        fetch(`${base.replace(/\/$/, "")}/api/match/start`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ roomId: this.room.id }),
+        }).catch(() => {});
+      }
+    }
   }
 
   private assignTeam(id: string, preferred?: "red" | "blue"): "red" | "blue" {
@@ -348,3 +389,5 @@ export default class Server {
     return Math.max(0, ids.indexOf(id));
   }
 }
+
+export { Server as GameRoom };

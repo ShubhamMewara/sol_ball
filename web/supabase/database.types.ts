@@ -89,6 +89,7 @@ export type Database = {
           id: string
           username: string | null
           wallet_key: string
+          balance_lamports: number
         }
         Insert: {
           avatar_url?: string | null
@@ -96,6 +97,7 @@ export type Database = {
           id?: string
           username?: string | null
           wallet_key: string
+          balance_lamports?: number
         }
         Update: {
           avatar_url?: string | null
@@ -103,6 +105,7 @@ export type Database = {
           id?: string
           username?: string | null
           wallet_key?: string
+          balance_lamports?: number
         }
         Relationships: []
       }
