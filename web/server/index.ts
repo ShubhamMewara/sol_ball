@@ -317,6 +317,7 @@ export default class Server {
     this.broadcastAccumMs = 0;
     this.broadcastSnapshot();
     this.endWebhookSent = false;
+
     // Fire start webhook once per match
     if (!this.startWebhookSent) {
       this.startWebhookSent = true;

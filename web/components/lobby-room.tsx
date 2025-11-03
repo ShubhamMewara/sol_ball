@@ -237,7 +237,7 @@ export default function LobbyWaitingModal({
             className="text-[#7ACD54] font-bold text-5xl mb-4"
             style={{ textShadow: "0 4px 16px rgba(122, 205, 84, 0.4)" }}
           >
-            {prizePot}
+            {(prizePot / LAMPORTS_PER_SOL).toFixed(4)}
           </div>
           <div className="text-[#DDD9C7] text-sm">
             Match Duration:{" "}

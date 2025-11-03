@@ -68,10 +68,10 @@ export default function CreateLobbyModal() {
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger className="bg-[#7ACD54] text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all shadow-[4px_4px_0_0_#65ab44]">
+        <DialogTrigger className="bg-[#7ACD54]  text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-[#6ab844] transition-all ">
           CREATE A LOBBY
         </DialogTrigger>
-        <DialogContent className="bg-[#1a1b24] rounded-lg p-8 w-full max-w-md border-2 border-[#2a2b34]">
+        <DialogContent className="bg-[#1a1b24] rounded-lg p-8 w-full max-w-md border-0 border-b-4 border-[#6ab844] shadow-lg shadow-[#6ab844]/40">
           <DialogHeader>
             <DialogTitle className="text-white font-bold text-2xl text-center mb-2">
               CREATE A LOBBY

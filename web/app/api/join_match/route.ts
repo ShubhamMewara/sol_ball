@@ -6,15 +6,14 @@ import {
   Keypair,
   PublicKey,
   Transaction,
-  TransactionMessage,
-  VersionedTransaction,
 } from "@solana/web3.js";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import IDL from "@/compiled/solball.json";
 
 export async function POST(req: NextRequest) {
   try {
     const { pubKeys, match_fees } = await req.json();
+
     const connection = new Connection(clusterApiUrl("devnet"));
     const secret = JSON.parse(process.env.WALLET!);
     const walletKeypair = Keypair.fromSecretKey(Uint8Array.from(secret));
@@ -60,5 +59,7 @@ export async function POST(req: NextRequest) {
     console.log(res);
 
     console.log("Transaction sent with signature:", res);
-  } catch (error) {}
+  } catch (error) {
+    return NextResponse.json({});
+  }
 }
