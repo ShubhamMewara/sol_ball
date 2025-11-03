@@ -1,5 +1,5 @@
 import planck from "planck-js";
-import { SCALE } from "./constants";
+import { SCALE, CONFIG } from "./constants";
 
 export function kick(
   player: planck.Body,
@@ -14,8 +14,10 @@ export function kick(
   const dist = Math.hypot(dx, dy);
   const playerR = playerRadiusPx / SCALE;
   const ballR = ballRadiusPx / SCALE;
-  const extraReachM = 0.5; // allow kicking from a bit farther than visual radius
-  if (dist < playerR + ballR + extraReachM && dist > 0) {
+  const extraReachM = CONFIG.kickExtraReachM ?? 0.5; // keep server & client in sync
+  // Kick when the BALL EDGE crosses a ring of radius (playerR + extraReachM)
+  // around the player center -> dist - ballR <= playerR + extraReachM
+  if (dist - ballR <= playerR + extraReachM && dist > 0) {
     const impulseMag = 0.5;
     ball.applyLinearImpulse(
       planck.Vec2((dx / dist) * impulseMag, (dy / dist) * impulseMag),

@@ -4,7 +4,8 @@ import { SCALE } from "./constants";
 export function createPlayer(world: planck.World, radiusPx: number) {
   const player = world.createDynamicBody({
     position: planck.Vec2(200 / SCALE, 260 / SCALE),
-    linearDamping: 5,
+    // Lower damping so velocity decays more slowly (more momentum)
+    linearDamping: 3,
     userData: { type: "player" },
   });
   player.createFixture(planck.Circle(radiusPx / SCALE), {

@@ -30,10 +30,19 @@ export type ServerWelcome = {
     moveSpeed: number;
     timeStep: number;
     goalHeightPx: number;
+    goalDepthPx?: number;
+    pitchInsetPx?: number;
+    kickExtraReachM?: number;
   };
 };
 
-export type SnapshotPlayer = { x: number; y: number; vx: number; vy: number };
+export type SnapshotPlayer = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  team?: "red" | "blue";
+};
 
 export type ClientSnapshot = {
   type: "snapshot";
@@ -43,7 +52,10 @@ export type ClientSnapshot = {
   score: { left: number; right: number };
   players: Record<string, SnapshotPlayer>;
   ball: { x: number; y: number; vx: number; vy: number };
-  phase?: "waiting" | "playing" | "ended";
+  phase?: "waiting" | "playing" | "celebrating" | "ended";
   timeLeftMs?: number;
   winner?: "left" | "right" | "draw";
+  // Optional goal celebration info (present during celebrating)
+  goalCelebrationMsLeft?: number;
+  lastGoalSide?: "left" | "right";
 };

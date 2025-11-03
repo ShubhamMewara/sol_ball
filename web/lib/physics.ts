@@ -1,96 +1,5 @@
+import { SCALE } from "@/server/game/constants";
 import planck from "planck-js";
-
-export const SCALE = 30; // pixels per meter
-export const WALL_THICKNESS_M = 0.5; // meters
-
-export function createWorld() {
-  return new planck.World(planck.Vec2(0, 0)); // top-down, no gravity
-}
-
-export function createWalls(
-  world: planck.World,
-  W: number,
-  H: number,
-  goalHeightPx: number,
-) {
-  const w = W / SCALE;
-  const h = H / SCALE;
-
-  const make = (x: number, y: number, width: number, height: number) => {
-    const b = world.createBody();
-    b.createFixture(planck.Box(width / 2, height / 2), {
-      density: 0,
-      restitution: 1,
-    });
-    b.setPosition(planck.Vec2(x, y));
-  };
-
-  // Top & Bottom full-width
-  make(w / 2, -WALL_THICKNESS_M / 2, w, WALL_THICKNESS_M);
-  make(w / 2, h + WALL_THICKNESS_M / 2, w, WALL_THICKNESS_M);
-
-  // Left & Right with goal gaps centered vertically
-  const gapH = goalHeightPx / SCALE; // meters
-  const halfGap = gapH / 2;
-
-  // Left side: above gap
-  make(
-    -WALL_THICKNESS_M / 2,
-    (h / 2 - halfGap) / 2,
-    WALL_THICKNESS_M,
-    h / 2 - halfGap,
-  );
-  // Left side: below gap
-  make(
-    -WALL_THICKNESS_M / 2,
-    (h + (h / 2 + halfGap)) / 2,
-    WALL_THICKNESS_M,
-    h / 2 - halfGap,
-  );
-
-  // Right side: above gap
-  make(
-    w + WALL_THICKNESS_M / 2,
-    (h / 2 - halfGap) / 2,
-    WALL_THICKNESS_M,
-    h / 2 - halfGap,
-  );
-  // Right side: below gap
-  make(
-    w + WALL_THICKNESS_M / 2,
-    (h + (h / 2 + halfGap)) / 2,
-    WALL_THICKNESS_M,
-    h / 2 - halfGap,
-  );
-}
-
-export function createPlayer(world: planck.World, radiusPx: number) {
-  const player = world.createDynamicBody({
-    position: planck.Vec2(200 / SCALE, 260 / SCALE),
-    linearDamping: 5,
-    userData: { type: "player" },
-  });
-  player.createFixture(planck.Circle(radiusPx / SCALE), {
-    density: 1,
-    restitution: 0.3,
-    friction: 0.2,
-  });
-  return player;
-}
-
-export function createBall(world: planck.World, radiusPx: number) {
-  const ball = world.createDynamicBody({
-    position: planck.Vec2(450 / SCALE, 260 / SCALE),
-    linearDamping: 0.6,
-    userData: { type: "ball" },
-  });
-  ball.createFixture(planck.Circle(radiusPx / SCALE), {
-    density: 0.5,
-    restitution: 0.9,
-    friction: 0.05,
-  });
-  return ball;
-}
 
 export function drawCircle(
   ctx: CanvasRenderingContext2D,
@@ -113,13 +22,15 @@ export function drawGoals(
   W: number,
   H: number,
   goalHeightPx: number,
+  goalDepthPx: number = 120,
+  pitchInsetPx: number = 20,
 ) {
-  // The pitch border is inset by 20px on all sides. Anchor goals to that line.
-  const touchLeftX = 20;
-  const touchRightX = W - 20;
+  // The pitch border is inset by pitchInsetPx on all sides. Anchor goals to that line.
+  const touchLeftX = pitchInsetPx;
+  const touchRightX = W - pitchInsetPx;
   const goalTop = H / 2 - goalHeightPx / 2;
   const goalBot = H / 2 + goalHeightPx / 2;
-  const outward = 10; // distance outside the touchline to draw bracket (inside canvas)
+  const depth = Math.max(6, goalDepthPx); // desired pocket depth
   const postRadius = 5; // pink knobs
 
   ctx.save();
@@ -128,43 +39,34 @@ export function drawGoals(
   ctx.strokeStyle = "#111";
   ctx.lineWidth = 6;
 
-  const drawBracket = (anchorX: number, side: "left" | "right") => {
-    // Ensure consistent stroke settings per bracket
+  const drawPocket = (anchorX: number, side: "left" | "right") => {
     ctx.save();
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 6;
-    const dir = side === "left" ? -1 : 1; // outward from touchline
-    // Position of bracket column (clamped to stay inside canvas)
-    let cx = anchorX + dir * outward;
-    cx = Math.max(6, Math.min(W - 6, cx));
 
-    // Smooth brace path (two gentle curves)
-    const pad = 10; // top/bottom padding for rounded ends
-    const ctrlX = Math.max(8, Math.min(W - 8, anchorX + dir * 12));
+    // Draw OUTSIDE the field but clamp depth so it stays inside the canvas.
+    const sideCanvasSpace = side === "left" ? anchorX : W - anchorX; // distance to canvas edge
+    const d = Math.min(depth, Math.max(4, sideCanvasSpace - 6));
+    const midY = (goalTop + goalBot) / 2;
+    const backX = side === "left" ? anchorX - d : anchorX + d;
 
+    // Simple U-shape: straight to back wall, smooth curved return, straight to post
     ctx.beginPath();
-    ctx.moveTo(cx, goalTop + pad);
-    ctx.quadraticCurveTo(ctrlX, (goalTop + H / 2) / 2, cx, H / 2);
-    ctx.quadraticCurveTo(ctrlX, (goalBot + H / 2) / 2, cx, goalBot - pad);
+    ctx.moveTo(anchorX, goalTop);
+    ctx.lineTo(backX, goalTop);
+    // Single quadratic curve for a clean outward bow
+    const ctrlX = side === "left" ? backX - d * 0.6 : backX + d * 0.6;
+    ctx.quadraticCurveTo(ctrlX, midY, backX, goalBot);
+    ctx.lineTo(anchorX, goalBot);
     ctx.stroke();
 
-    // Draw short connectors from touchline to bracket at three points
-    ctx.beginPath();
-    const y1 = goalTop + 8;
-    const y2 = H / 2;
-    const y3 = goalBot - 8;
-    ctx.moveTo(anchorX, y1); ctx.lineTo(cx, y1);
-    ctx.moveTo(anchorX, y2); ctx.lineTo(cx, y2);
-    ctx.moveTo(anchorX, y3); ctx.lineTo(cx, y3);
-    ctx.stroke();
-
-    // Pink knobs at top/middle/bottom (on bracket column)
+    // Draw pink posts on the touchline at the goal mouth ends
     ctx.fillStyle = "#ffb6c1";
     ctx.strokeStyle = "#111";
     ctx.lineWidth = 2;
-    for (const y of [y1, y2, y3]) {
+    for (const y of [goalTop, goalBot]) {
       ctx.beginPath();
-      ctx.arc(cx, y, postRadius, 0, Math.PI * 2);
+      ctx.arc(anchorX, y, postRadius, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -172,9 +74,9 @@ export function drawGoals(
   };
 
   // Left goal
-  drawBracket(touchLeftX, "left");
+  drawPocket(touchLeftX, "left");
   // Right goal
-  drawBracket(touchRightX, "right");
+  drawPocket(touchRightX, "right");
   ctx.restore();
 }
 
@@ -183,6 +85,8 @@ export function drawPitch(
   W: number,
   H: number,
   goalHeightPx: number,
+  goalDepthPx: number = 120,
+  pitchInsetPx: number = 20,
 ) {
   // Base
   ctx.fillStyle = "#5f8f57";
@@ -202,12 +106,12 @@ export function drawPitch(
   // Touchline border
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 4;
-  ctx.strokeRect(20, 20, W - 40, H - 40);
+  ctx.strokeRect(pitchInsetPx, pitchInsetPx, W - pitchInsetPx * 2, H - pitchInsetPx * 2);
 
   // Center line
   ctx.beginPath();
-  ctx.moveTo(W / 2, 20);
-  ctx.lineTo(W / 2, H - 20);
+  ctx.moveTo(W / 2, pitchInsetPx);
+  ctx.lineTo(W / 2, H - pitchInsetPx);
   ctx.stroke();
 
   // Center circle and spot
@@ -220,7 +124,7 @@ export function drawPitch(
   ctx.fill();
 
   // Goals visual
-  drawGoals(ctx, W, H, goalHeightPx);
+  drawGoals(ctx, W, H, goalHeightPx, goalDepthPx, pitchInsetPx);
 }
 
 export function resetPositions(
@@ -239,29 +143,6 @@ export function resetPositions(
   bodies.player.setAngularVelocity(0);
   bodies.player.setPosition(planck.Vec2(200 / SCALE, 260 / SCALE));
   bodies.player.setAwake(true);
-}
-
-export function kick(
-  player: planck.Body,
-  ball: planck.Body,
-  playerRadiusPx: number,
-  ballRadiusPx: number,
-) {
-  const p = player.getPosition();
-  const b = ball.getPosition();
-  const dx = b.x - p.x;
-  const dy = b.y - p.y;
-  const dist = Math.hypot(dx, dy);
-  const playerR = playerRadiusPx / SCALE;
-  const ballR = ballRadiusPx / SCALE;
-  if (dist < playerR + ballR + 0.15 && dist > 0) {
-    const impulseMag = 0.5;
-    ball.applyLinearImpulse(
-      planck.Vec2((dx / dist) * impulseMag, (dy / dist) * impulseMag),
-      ball.getWorldCenter(),
-      true,
-    );
-  }
 }
 
 export type Bodies = { player: planck.Body; ball: planck.Body };
