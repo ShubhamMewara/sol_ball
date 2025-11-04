@@ -14,7 +14,7 @@ export default class Server {
   private lastTickMs = Date.now();
   private physicsAccumMs = 0;
   private broadcastAccumMs = 0; // throttle broadcast to ~30 Hz
-  private phase: "waiting" | "playing" | "ended" = "waiting";
+  private phase: "waiting" | "playing" | "celebrating" | "ended" = "waiting";
   private hostConnId: string | null = null;
   private hostWallet?: string;
   private endAtMs: number | null = null;
@@ -23,11 +23,21 @@ export default class Server {
   private teamByConn: Map<string, "red" | "blue"> = new Map();
   private maxPlayersPerTeam = 3;
   private spectators: Set<string> = new Set();
+  private startWebhookSent = false;
+  private endWebhookSent = false;
+  private celebrationEndAtMs: number | null = null;
+  private lastGoalSide: "left" | "right" | null = null;
 
   constructor(public room: Party.Room) {
     // Initialize world
     this.world = createWorld();
-    createWalls(this.world, CONFIG.W, CONFIG.H, CONFIG.goalHeightPx);
+    createWalls(
+      this.world,
+      CONFIG.W,
+      CONFIG.H,
+      CONFIG.goalHeightPx,
+      CONFIG.goalDepthPx
+    );
     this.ball = createBall(this.world, CONFIG.ballRadiusPx);
     // Drive simulation off inbound inputs; no server-side interval required
   }
@@ -47,6 +57,9 @@ export default class Server {
       const stepMs = CONFIG.timeStep * 1000; // fixed physics step duration in ms
       while (this.physicsAccumMs >= stepMs) {
         this.world.step(CONFIG.timeStep);
+        // Make ball follow the pushing player's movement like real football
+        this.applyDribbleInteraction();
+        this.enforceBallTouchlineWalls();
         this.physicsAccumMs -= stepMs;
       }
       this.detectGoals();
@@ -54,6 +67,44 @@ export default class Server {
       if (this.endAtMs && now >= this.endAtMs) {
         this.phase = "ended";
         this.endAtMs = null;
+        // Fire settle webhook once
+        if (!this.endWebhookSent) {
+          this.endWebhookSent = true;
+          const winner =
+            this.score.left === this.score.right
+              ? null
+              : this.score.left > this.score.right
+              ? "left"
+              : "right";
+          const map: any = { left: "red", right: "blue" };
+          const winnerTeam = winner ? map[winner] : null;
+          const base =
+            process?.env?.MATCH_WEBHOOK_BASE_URL ||
+            "https://solball.vercel.app";
+          if (base && winnerTeam) {
+            fetch(`${base.replace(/\/$/, "")}/api/match/settle`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                roomId: this.room.id,
+                winner: winnerTeam,
+              }),
+            }).catch(() => {});
+          }
+        }
+      }
+    } else if (this.phase === "celebrating") {
+      // Hold physics during celebration, then reset and resume play
+      if (this.celebrationEndAtMs && now >= this.celebrationEndAtMs) {
+        this.resetPositions();
+        this.phase = "playing";
+        this.celebrationEndAtMs = null;
+        this.lastGoalSide = null;
+        // Kick off an immediate broadcast to reflect reset
+        this.broadcastAccumMs = 0;
+        this.broadcastSnapshot();
+      } else {
+        this.physicsAccumMs = 0; // frozen
       }
     } else {
       // Not playing; don't let accumulator grow unbounded
@@ -109,7 +160,7 @@ export default class Server {
         // If a start was requested earlier but teams weren't ready, try starting now
         if (
           this.pendingStart &&
-          this.phase !== "playing" &&
+          this.phase === "waiting" &&
           this.countTeam("red") >= 1 &&
           this.countTeam("blue") >= 1
         ) {
@@ -141,7 +192,7 @@ export default class Server {
           (!this.hostWallet && this.hostConnId === sender.id);
         if (!isHost) return;
         // Prevent accidental restarts mid-game (e.g. reconnects)
-        if (this.phase === "playing") return;
+        if (this.phase !== "waiting") return; // only start from waiting
         const durationMin = Number(msg.durationMin) || this.matchDurationMin;
         this.matchDurationMin = durationMin;
         // If teams are ready, start now; otherwise remember to start when ready
@@ -154,21 +205,48 @@ export default class Server {
       } else if (msg.type === "inputs") {
         const keys = msg.keys || {};
         const actor = this.players.get(sender.id);
-        if (!actor) return;
-        if (this.phase !== "playing") return; // ignore inputs until started
-        let vx = 0;
-        let vy = 0;
-        if (keys.w) vy -= CONFIG.moveSpeed;
-        if (keys.s) vy += CONFIG.moveSpeed;
-        if (keys.a) vx -= CONFIG.moveSpeed;
-        if (keys.d) vx += CONFIG.moveSpeed;
-        actor.setLinearVelocity(planck.Vec2(vx, vy));
+        // Only apply movement/kick while playing; still advance timers/broadcast below
+        if (this.phase === "playing" && actor) {
+          // Compute desired direction from keys
+          let dx = 0;
+          let dy = 0;
+          if (keys.w) dy -= 1;
+          if (keys.s) dy += 1;
+          if (keys.a) dx -= 1;
+          if (keys.d) dx += 1;
+          // Normalize direction
+          let len = Math.hypot(dx, dy);
+          if (len > 0) {
+            dx /= len;
+            dy /= len;
+          }
+          const cur = actor.getLinearVelocity();
+          const maxSpeed = CONFIG.moveSpeed; // m/s
+          // Desired velocity points toward input direction; if no input, keep current
+          const desiredVx = len > 0 ? dx * maxSpeed : cur.x;
+          const desiredVy = len > 0 ? dy * maxSpeed : cur.y;
+          // Apply acceleration limit for momentum feel
+          const accel = (CONFIG as any).playerAccelMps2 ?? 25; // m/s^2
+          const dt = CONFIG.timeStep; // approximate per-step
+          const maxDelta = accel * dt; // m/s change per input tick
+          const dvx = desiredVx - cur.x;
+          const dvy = desiredVy - cur.y;
+          const dlen = Math.hypot(dvx, dvy);
+          let nextVx = cur.x;
+          let nextVy = cur.y;
+          if (dlen > 0) {
+            const scale = Math.min(1, maxDelta / dlen);
+            nextVx = cur.x + dvx * scale;
+            nextVy = cur.y + dvy * scale;
+          }
+          actor.setLinearVelocity(planck.Vec2(nextVx, nextVy));
 
-        if (msg.actions?.kick) {
-          kick(actor, this.ball, CONFIG.playerRadiusPx, CONFIG.ballRadiusPx);
+          if (msg.actions?.kick) {
+            kick(actor, this.ball, CONFIG.playerRadiusPx, CONFIG.ballRadiusPx);
+          }
         }
 
-        // Advance simulation based on elapsed time since last tick
+        // Advance simulation based on elapsed time since last tick (always)
         const now = Date.now();
         let deltaMs = now - this.lastTickMs;
         if (deltaMs < 0) deltaMs = 0;
@@ -215,11 +293,116 @@ export default class Server {
     const margin = 1;
     if (xpx < -margin) {
       this.score.left += 1;
-      this.resetPositions();
+      this.lastGoalSide = "left";
+      this.startCelebration();
     } else if (xpx > W + margin) {
       this.score.right += 1;
-      this.resetPositions();
+      this.lastGoalSide = "right";
+      this.startCelebration();
     }
+  }
+
+  private startCelebration() {
+    // Enter a short celebration phase before resetting positions
+    this.phase = "celebrating";
+    const CELEB_MS = 3000; // increased celebration time
+    this.celebrationEndAtMs = Date.now() + CELEB_MS;
+  }
+
+  // Prevent the ball from crossing the white touchline rectangle while allowing it
+  // to pass through the left/right goal openings (goalHeightPx band). Players are
+  // unaffected. We do this post-step by clamping position and reflecting velocity.
+  private enforceBallTouchlineWalls() {
+    const { W, H, goalHeightPx, pitchInsetPx } = CONFIG as any;
+    const top = pitchInsetPx;
+    const bottom = H - pitchInsetPx;
+    const left = pitchInsetPx;
+    const right = W - pitchInsetPx;
+
+    const p = this.ball.getPosition();
+    const v = this.ball.getLinearVelocity();
+    let x = p.x * SCALE;
+    let y = p.y * SCALE;
+    let vx = v.x;
+    let vy = v.y;
+    const inGoalBand =
+      y > H / 2 - goalHeightPx / 2 && y < H / 2 + goalHeightPx / 2;
+
+    const bounceK = 0.9; // little energy loss
+
+    // Left wall (block unless within goal band)
+    if (x < left && !inGoalBand) {
+      x = left;
+      vx = Math.abs(vx) * bounceK;
+    }
+    // Right wall
+    if (x > right && !inGoalBand) {
+      x = right;
+      vx = -Math.abs(vx) * bounceK;
+    }
+    // Top and bottom always block
+    if (y < top) {
+      y = top;
+      vy = Math.abs(vy) * bounceK;
+    }
+    if (y > bottom) {
+      y = bottom;
+      vy = -Math.abs(vy) * bounceK;
+    }
+
+    // Write back if changed
+    this.ball.setPosition(planck.Vec2(x / SCALE, y / SCALE));
+    this.ball.setLinearVelocity(planck.Vec2(vx, vy));
+  }
+
+  // If a player is physically touching the ball, make the ball inherit
+  // a good portion of that player's current velocity and gently separate
+  // them. This mimics a football dribble instead of a constant "kick".
+  private applyDribbleInteraction() {
+    const playerR = CONFIG.playerRadiusPx / SCALE;
+    const ballR = CONFIG.ballRadiusPx / SCALE;
+    const sumR = playerR + ballR;
+    const SEP = 0.01; // meters separation target
+    const mix = 0.35; // amount to approach player's normal speed (not full match)
+    const tangentDamp = 0.98; // slight damp to avoid sticky feel
+
+    const bp = this.ball.getPosition();
+    const bv = this.ball.getLinearVelocity();
+    let vx = bv.x;
+    let vy = bv.y;
+    let touched = false;
+
+    for (const [, body] of this.players) {
+      const pp = body.getPosition();
+      const dx = bp.x - pp.x;
+      const dy = bp.y - pp.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= sumR + 0.01) {
+        touched = true;
+        const nx = dist > 0 ? dx / dist : 1;
+        const ny = dist > 0 ? dy / dist : 0;
+        // Separate slightly so shapes don't interpenetrate
+        const target = sumR + SEP;
+        if (dist < target) {
+          this.ball.setPosition(
+            planck.Vec2(pp.x + nx * target, pp.y + ny * target)
+          );
+        }
+        // Adjust velocity along the contact normal only (like pushing the ball)
+        const pv = body.getLinearVelocity();
+        const vbN = vx * nx + vy * ny; // ball normal speed
+        const vpN = pv.x * nx + pv.y * ny; // player normal speed
+        if (vpN > vbN) {
+          const vbT_x = vx - vbN * nx; // tangential component
+          const vbT_y = vy - vbN * ny;
+          const vbN_new = vbN + (vpN - vbN) * mix;
+          vx = vbT_x * tangentDamp + vbN_new * nx;
+          vy = vbT_y * tangentDamp + vbN_new * ny;
+        }
+      }
+    }
+
+    if (touched) this.ball.setLinearVelocity(planck.Vec2(vx, vy));
   }
 
   resetPositions() {
@@ -238,12 +421,13 @@ export default class Server {
   broadcastSnapshot() {
     const players: Record<
       string,
-      { x: number; y: number; vx: number; vy: number }
+      { x: number; y: number; vx: number; vy: number; team?: "red" | "blue" }
     > = {};
     for (const [id, body] of this.players) {
       const p = body.getPosition();
       const v = body.getLinearVelocity();
-      players[id] = { x: p.x, y: p.y, vx: v.x, vy: v.y };
+      const team = this.teamByConn.get(id);
+      players[id] = { x: p.x, y: p.y, vx: v.x, vy: v.y, team };
     }
     const bp = this.ball.getPosition();
     const bv = this.ball.getLinearVelocity();
@@ -261,6 +445,11 @@ export default class Server {
       ball: { x: bp.x, y: bp.y, vx: bv.x, vy: bv.y },
       phase: this.phase,
       timeLeftMs,
+      goalCelebrationMsLeft:
+        this.phase === "celebrating" && this.celebrationEndAtMs
+          ? Math.max(0, this.celebrationEndAtMs - Date.now())
+          : 0,
+      lastGoalSide: this.lastGoalSide ?? undefined,
       winner:
         this.phase === "ended"
           ? this.score.left === this.score.right
@@ -289,6 +478,21 @@ export default class Server {
     this.physicsAccumMs = 0;
     this.broadcastAccumMs = 0;
     this.broadcastSnapshot();
+    this.endWebhookSent = false;
+
+    // Fire start webhook once per match
+    if (!this.startWebhookSent) {
+      this.startWebhookSent = true;
+      const base =
+        process?.env?.MATCH_WEBHOOK_BASE_URL || "https://solball.vercel.app";
+      if (base) {
+        fetch(`${base.replace(/\/$/, "")}/api/match/start`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ roomId: this.room.id }),
+        }).catch(() => {});
+      }
+    }
   }
 
   private assignTeam(id: string, preferred?: "red" | "blue"): "red" | "blue" {
@@ -348,3 +552,5 @@ export default class Server {
     return Math.max(0, ids.indexOf(id));
   }
 }
+
+export { Server as GameRoom };

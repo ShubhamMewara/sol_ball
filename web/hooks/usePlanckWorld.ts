@@ -2,15 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import planck from "planck-js";
-import { createWorld, createWalls, createPlayer, createBall } from "../lib/physics";
 import { useGameStore } from "../store/gameStore";
+import { createWalls, createWorld } from "@/server/game/world";
+import { createPlayer } from "@/server/game/players";
+import { createBall } from "@/server/game/ball";
 
 export function usePlanckWorld(
-  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
 ) {
   const worldRef = useRef<planck.World | null>(null);
   const bodiesRef = useRef<{ player: planck.Body; ball: planck.Body } | null>(
-    null,
+    null
   );
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
@@ -18,7 +20,8 @@ export function usePlanckWorld(
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-  const { W, H, playerRadiusPx, ballRadiusPx, goalHeightPx } = useGameStore.getState().config;
+    const { W, H, playerRadiusPx, ballRadiusPx, goalHeightPx } =
+      useGameStore.getState().config;
 
     canvas.width = W;
     canvas.height = H;
@@ -30,7 +33,7 @@ export function usePlanckWorld(
     const world = createWorld();
     worldRef.current = world;
 
-  createWalls(world, W, H, goalHeightPx);
+    createWalls(world, W, H, goalHeightPx);
     const player = createPlayer(world, playerRadiusPx);
     const ball = createBall(world, ballRadiusPx);
     bodiesRef.current = { player, ball };

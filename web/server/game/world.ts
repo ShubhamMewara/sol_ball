@@ -1,4 +1,4 @@
-import { SCALE } from "./constants";
+import { SCALE, WALL_THICKNESS_M } from "./constants";
 import planck from "planck-js";
 
 export function createWorld() {
@@ -9,11 +9,11 @@ export function createWalls(
   world: planck.World,
   W: number,
   H: number,
-  goalHeightPx: number
+  goalHeightPx: number,
+  goalDepthPx: number = 0
 ) {
   const w = W / SCALE;
   const h = H / SCALE;
-  const WALL_THICKNESS_M = 0.5;
 
   const make = (x: number, y: number, width: number, height: number) => {
     const b = world.createBody();

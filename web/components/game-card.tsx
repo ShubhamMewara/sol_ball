@@ -5,6 +5,7 @@ import LobbyWaitingModal from "./lobby-room";
 import { slugify } from "@/lib/utils";
 import { usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 interface GameCardProps {
   stake: number;
@@ -49,7 +50,7 @@ export default function GameCard({
               className="text-white font-bold text-2xl drop-shadow-lg"
               style={{ textShadow: "0 4px 12px rgba(122, 205, 84, 0.3)" }}
             >
-              {stake} SOL
+              {(stake / LAMPORTS_PER_SOL).toFixed(4)} SOL
             </span>
           </div>
         </div>

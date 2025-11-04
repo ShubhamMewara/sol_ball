@@ -2,8 +2,8 @@
 
 import { useEffect } from "react";
 import { useGameStore } from "../store/gameStore";
-import { kick } from "../lib/physics";
 import planck from "planck-js";
+import { kick } from "@/server/game/kick";
 
 export function useInput(
   bodiesRef: React.RefObject<{ player: planck.Body; ball: planck.Body } | null>,

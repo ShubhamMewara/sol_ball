@@ -1,16 +1,7 @@
 "use client";
 
+import { CONFIG, GameConfig } from "@/server/game/constants";
 import { create } from "zustand";
-
-export type GameConfig = {
-  W: number;
-  H: number;
-  playerRadiusPx: number;
-  ballRadiusPx: number;
-  moveSpeed: number; // meters/sec
-  timeStep: number; // seconds
-  goalHeightPx: number; // opening height of goal on left/right walls
-};
 
 export type GameState = {
   keys: Record<string, boolean>;
@@ -24,31 +15,18 @@ export type GameState = {
   lastGoalAt?: number;
   addGoal: (side: "left" | "right") => void;
   // Online-game specific derived state
-  phase?: "waiting" | "playing" | "ended";
+  phase?: "waiting" | "playing" | "celebrating" | "ended";
   timerMs?: number;
   winnerSide?: "left" | "right" | "draw" | null;
+  celebrateMsLeft?: number;
+  lastGoalSide?: "left" | "right" | null;
 };
-
-const defaultConfig: GameConfig = {
-  W: 900,
-  H: 520,
-  playerRadiusPx: 18,
-  ballRadiusPx: 12,
-  moveSpeed: 4.5,
-  timeStep: 1 / 60,
-  goalHeightPx: 160,
-};
-
-type SetState<T> = (
-  partial: Partial<T> | ((state: T) => Partial<T>),
-  replace?: boolean,
-) => void;
 
 export const useGameStore = create<GameState>((set, get) => ({
   keys: {},
   setKey: (key: string, pressed: boolean) =>
     set((state) => ({ keys: { ...state.keys, [key.toLowerCase()]: pressed } })),
-  config: defaultConfig,
+  config: CONFIG,
   setConfig: (partial: Partial<GameConfig>) =>
     set((state) => ({ config: { ...state.config, ...partial } })),
   paused: false,
@@ -70,4 +48,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   phase: "waiting",
   timerMs: undefined,
   winnerSide: null,
+  celebrateMsLeft: 0,
+  lastGoalSide: null,
 }));
