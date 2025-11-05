@@ -42,6 +42,8 @@ export type SnapshotPlayer = {
   vx: number;
   vy: number;
   team?: "red" | "blue";
+  key?: string; // stable player identity (e.g., wallet/user id)
+  num?: number; // stable jersey number derived from key
 };
 
 export type ClientSnapshot = {
@@ -49,13 +51,13 @@ export type ClientSnapshot = {
   t: number; // server time
   me: string; // my id
   lastSeq?: number; // optional last processed input seq
-  score: { left: number; right: number };
+  score: { red: number; blue: number };
   players: Record<string, SnapshotPlayer>;
   ball: { x: number; y: number; vx: number; vy: number };
   phase?: "waiting" | "playing" | "celebrating" | "ended";
   timeLeftMs?: number;
-  winner?: "left" | "right" | "draw";
+  winner?: "red" | "blue" | "draw";
   // Optional goal celebration info (present during celebrating)
   goalCelebrationMsLeft?: number;
-  lastGoalSide?: "left" | "right";
+  lastGoalTeam?: "red" | "blue";
 };

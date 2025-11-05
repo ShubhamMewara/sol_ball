@@ -10,16 +10,16 @@ export type GameState = {
   setConfig: (partial: Partial<GameConfig>) => void;
   paused: boolean;
   setPaused: (p: boolean) => void;
-  scoreLeft: number; // goals scored into LEFT net (by right-side attacker)
-  scoreRight: number; // goals scored into RIGHT net (by left-side attacker)
+  scoreRed: number;
+  scoreBlue: number;
   lastGoalAt?: number;
-  addGoal: (side: "left" | "right") => void;
+  addGoal: (team: "red" | "blue") => void;
   // Online-game specific derived state
   phase?: "waiting" | "playing" | "celebrating" | "ended";
   timerMs?: number;
-  winnerSide?: "left" | "right" | "draw" | null;
+  winnerTeam?: "red" | "blue" | "draw" | null;
   celebrateMsLeft?: number;
-  lastGoalSide?: "left" | "right" | null;
+  lastGoalTeam?: "red" | "blue" | null;
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -31,23 +31,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({ config: { ...state.config, ...partial } })),
   paused: false,
   setPaused: (p: boolean) => set({ paused: p }),
-  scoreLeft: 0,
-  scoreRight: 0,
+  scoreRed: 0,
+  scoreBlue: 0,
   lastGoalAt: undefined,
-  addGoal: (side: "left" | "right") =>
+  addGoal: (team: "red" | "blue") =>
     set((state) => {
       const now = performance.now();
       // debounce consecutive detections
       if (state.lastGoalAt && now - state.lastGoalAt < 800) return {};
       return {
-        scoreLeft: state.scoreLeft + (side === "left" ? 1 : 0),
-        scoreRight: state.scoreRight + (side === "right" ? 1 : 0),
+        scoreRed: state.scoreRed + (team === "red" ? 1 : 0),
+        scoreBlue: state.scoreBlue + (team === "blue" ? 1 : 0),
         lastGoalAt: now,
       };
     }),
   phase: "waiting",
   timerMs: undefined,
-  winnerSide: null,
+  winnerTeam: null,
   celebrateMsLeft: 0,
-  lastGoalSide: null,
+  lastGoalTeam: null,
 }));

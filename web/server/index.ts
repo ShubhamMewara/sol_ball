@@ -10,23 +10,26 @@ export default class Server {
   world: planck.World;
   players: Map<string, planck.Body> = new Map();
   ball: planck.Body;
-  score = { left: 0, right: 0 };
+  score = { red: 0, blue: 0 };
   private lastTickMs = Date.now();
   private physicsAccumMs = 0;
-  private broadcastAccumMs = 0; // throttle broadcast to ~30 Hz
+  private broadcastAccumMs = 0;
   private phase: "waiting" | "playing" | "celebrating" | "ended" = "waiting";
   private hostConnId: string | null = null;
   private hostWallet?: string;
   private endAtMs: number | null = null;
   private matchDurationMin = 3;
   private pendingStart: { durationMin: number } | null = null;
-  private teamByConn: Map<string, "red" | "blue"> = new Map();
+  // Persist team by stable player identity
+  private teamByPlayer: Map<string, "red" | "blue"> = new Map();
+  private connToPlayer: Map<string, string> = new Map();
   private maxPlayersPerTeam = 3;
   private spectators: Set<string> = new Set();
   private startWebhookSent = false;
   private endWebhookSent = false;
   private celebrationEndAtMs: number | null = null;
-  private lastGoalSide: "left" | "right" | null = null;
+  private lastGoalTeam: "red" | "blue" | null = null;
+  private startRequested = false;
 
   constructor(public room: Party.Room) {
     // Initialize world
@@ -70,14 +73,12 @@ export default class Server {
         // Fire settle webhook once
         if (!this.endWebhookSent) {
           this.endWebhookSent = true;
-          const winner =
-            this.score.left === this.score.right
+          const winnerTeam =
+            this.score.red === this.score.blue
               ? null
-              : this.score.left > this.score.right
-              ? "left"
-              : "right";
-          const map: any = { left: "red", right: "blue" };
-          const winnerTeam = winner ? map[winner] : null;
+              : this.score.red > this.score.blue
+              ? "red"
+              : "blue";
           const base =
             process?.env?.MATCH_WEBHOOK_BASE_URL ||
             "https://solball.vercel.app";
@@ -99,7 +100,8 @@ export default class Server {
         this.resetPositions();
         this.phase = "playing";
         this.celebrationEndAtMs = null;
-        this.lastGoalSide = null;
+        this.lastGoalTeam = null;
+
         // Kick off an immediate broadcast to reflect reset
         this.broadcastAccumMs = 0;
         this.broadcastSnapshot();
@@ -148,8 +150,36 @@ export default class Server {
         }
         // If previously marked spectator, unmark
         this.spectators.delete(sender.id);
-        const assigned = this.assignTeam(sender.id, preferred);
-        this.teamByConn.set(sender.id, assigned);
+        // Stable player identity for team persistence (wallet/user id recommended)
+        const playerKey: string = String(
+          msg.playerKey || msg.wallet || sender.id
+        );
+        const prevKey = this.connToPlayer.get(sender.id);
+        // If same player reconnects, drop old connection/body
+        for (const [cid, pk] of this.connToPlayer.entries()) {
+          if (pk === playerKey && cid !== sender.id) {
+            const old = this.players.get(cid);
+            if (old) this.world.destroyBody(old);
+            this.players.delete(cid);
+            this.connToPlayer.delete(cid);
+            break;
+          }
+        }
+        // If this connection previously used a different key (e.g., before wallet loaded), carry over its team
+        if (prevKey && prevKey !== playerKey) {
+          const prevTeam = this.teamByPlayer.get(prevKey);
+          if (prevTeam && !this.teamByPlayer.has(playerKey)) {
+            this.teamByPlayer.set(playerKey, prevTeam);
+          }
+          this.teamByPlayer.delete(prevKey);
+        }
+        // Assign or reuse team by playerKey
+        let assigned = this.teamByPlayer.get(playerKey);
+        if (!assigned) {
+          assigned = this.assignTeam(playerKey, preferred);
+          this.teamByPlayer.set(playerKey, assigned);
+        }
+        this.connToPlayer.set(sender.id, playerKey);
         // Ensure a player body exists
         if (!this.players.has(sender.id)) {
           const body = createPlayer(this.world, CONFIG.playerRadiusPx);
@@ -157,16 +187,8 @@ export default class Server {
         }
         // Place the player at a spawn
         this.placePlayerAtSpawn(sender.id);
-        // If a start was requested earlier but teams weren't ready, try starting now
-        if (
-          this.pendingStart &&
-          this.phase === "waiting" &&
-          this.countTeam("red") >= 1 &&
-          this.countTeam("blue") >= 1
-        ) {
-          this.startMatch(this.pendingStart.durationMin);
-          this.pendingStart = null;
-        }
+        // Try starting if a request exists
+        this.maybeStart();
         return;
       }
       if (msg.type === "spectate") {
@@ -176,7 +198,7 @@ export default class Server {
           this.world.destroyBody(b);
           this.players.delete(sender.id);
         }
-        this.teamByConn.delete(sender.id);
+        this.connToPlayer.delete(sender.id);
         this.spectators.add(sender.id);
         return;
       }
@@ -191,17 +213,7 @@ export default class Server {
           (this.hostWallet && msg.wallet && this.hostWallet === msg.wallet) ||
           (!this.hostWallet && this.hostConnId === sender.id);
         if (!isHost) return;
-        // Prevent accidental restarts mid-game (e.g. reconnects)
-        if (this.phase !== "waiting") return; // only start from waiting
-        const durationMin = Number(msg.durationMin) || this.matchDurationMin;
-        this.matchDurationMin = durationMin;
-        // If teams are ready, start now; otherwise remember to start when ready
-        if (this.countTeam("red") >= 1 && this.countTeam("blue") >= 1) {
-          this.startMatch(durationMin);
-          this.pendingStart = null;
-        } else {
-          this.pendingStart = { durationMin };
-        }
+        this.requestStart(Number(msg.durationMin) || this.matchDurationMin);
       } else if (msg.type === "inputs") {
         const keys = msg.keys || {};
         const actor = this.players.get(sender.id);
@@ -257,12 +269,32 @@ export default class Server {
       // ignore malformed messages
     }
   }
+  // Centralized start request and execution logic to avoid duplicate starts
+  private requestStart(durationMin: number) {
+    if (this.phase !== "waiting") return; // already started or ended
+    // If already requested, just update duration (optional) and try again
+    this.matchDurationMin = durationMin;
+    this.pendingStart = { durationMin };
+    this.startRequested = true;
+    this.maybeStart();
+  }
+
+  private maybeStart() {
+    if (this.phase !== "waiting") return;
+    if (!this.pendingStart) return;
+    // Require at least one player body to exist
+    if (this.players.size < 1) return;
+    const dur = this.pendingStart.durationMin || this.matchDurationMin;
+    this.pendingStart = null;
+    this.startRequested = false;
+    this.startMatch(dur);
+  }
 
   onClose(conn: any, _ctx?: any) {
     const b = this.players.get(conn.id);
     if (b) this.world.destroyBody(b);
     this.players.delete(conn.id);
-    this.teamByConn.delete(conn.id);
+    this.connToPlayer.delete(conn.id);
     this.spectators.delete(conn.id);
     if (!this.hostWallet && this.hostConnId === conn.id) {
       // reassign hostConnId to another active connection if any
@@ -282,22 +314,26 @@ export default class Server {
   }
 
   detectGoals() {
-    const { W, H, goalHeightPx } = CONFIG;
+    const { W, H, goalHeightPx, pitchInsetPx } = CONFIG as any;
     const pos = this.ball.getPosition();
     const xpx = pos.x * SCALE;
     const ypx = pos.y * SCALE;
     const inBand =
       ypx > H / 2 - goalHeightPx / 2 && ypx < H / 2 + goalHeightPx / 2;
     if (!inBand) return;
-    // Small safety margin to avoid floating point flicker
-    const margin = 1;
-    if (xpx < -margin) {
-      this.score.left += 1;
-      this.lastGoalSide = "left";
+    // Count a goal only when the ENTIRE ball crosses the white goal line
+    // i.e., center +/- radius is beyond the line plane.
+    const r = CONFIG.ballRadiusPx as number;
+    const leftLine = pitchInsetPx as number; // x-position of left white line
+    const rightLine = W - (pitchInsetPx as number); // x-position of right white line
+    const eps = 0.5; // small tolerance in pixels
+    if (xpx + r <= leftLine - eps) {
+      this.score.red += 1; // ball fully crossed into LEFT goal, red scores
+      this.lastGoalTeam = "red";
       this.startCelebration();
-    } else if (xpx > W + margin) {
-      this.score.right += 1;
-      this.lastGoalSide = "right";
+    } else if (xpx - r >= rightLine + eps) {
+      this.score.blue += 1; // ball fully crossed into RIGHT goal, blue scores
+      this.lastGoalTeam = "blue";
       this.startCelebration();
     }
   }
@@ -421,13 +457,29 @@ export default class Server {
   broadcastSnapshot() {
     const players: Record<
       string,
-      { x: number; y: number; vx: number; vy: number; team?: "red" | "blue" }
+      {
+        x: number;
+        y: number;
+        vx: number;
+        vy: number;
+        team?: "red" | "blue";
+        key?: string;
+        num?: number;
+      }
     > = {};
     for (const [id, body] of this.players) {
       const p = body.getPosition();
       const v = body.getLinearVelocity();
-      const team = this.teamByConn.get(id);
-      players[id] = { x: p.x, y: p.y, vx: v.x, vy: v.y, team };
+      const pk = this.connToPlayer.get(id);
+      const team = pk ? this.teamByPlayer.get(pk) : undefined;
+      // Stable jersey number from player key (1-9)
+      let num: number | undefined = undefined;
+      if (pk) {
+        let sum = 0;
+        for (let i = 0; i < pk.length; i++) sum += pk.charCodeAt(i);
+        num = (Math.abs(sum) % 9) + 1;
+      }
+      players[id] = { x: p.x, y: p.y, vx: v.x, vy: v.y, team, key: pk, num };
     }
     const bp = this.ball.getPosition();
     const bv = this.ball.getLinearVelocity();
@@ -449,14 +501,15 @@ export default class Server {
         this.phase === "celebrating" && this.celebrationEndAtMs
           ? Math.max(0, this.celebrationEndAtMs - Date.now())
           : 0,
-      lastGoalSide: this.lastGoalSide ?? undefined,
+      lastGoalTeam: this.lastGoalTeam ?? undefined,
+      lastGoalSide: this.lastGoalTeam ?? undefined,
       winner:
         this.phase === "ended"
-          ? this.score.left === this.score.right
+          ? this.score.red === this.score.blue
             ? "draw"
-            : this.score.left > this.score.right
-            ? "left"
-            : "right"
+            : this.score.red > this.score.blue
+            ? "red"
+            : "blue"
           : undefined,
     };
 
@@ -469,7 +522,7 @@ export default class Server {
 
   private startMatch(durationMin: number) {
     // Reset scores and positions
-    this.score = { left: 0, right: 0 };
+    this.score = { red: 0, blue: 0 };
     this.resetPositions();
     this.phase = "playing";
     this.endAtMs = Date.now() + Math.max(1, durationMin) * 60 * 1000;
@@ -519,14 +572,17 @@ export default class Server {
 
   private countTeam(team: "red" | "blue") {
     let n = 0;
-    for (const [, t] of this.teamByConn) if (t === team) n++;
+    for (const [cid, pk] of this.connToPlayer) {
+      if (this.teamByPlayer.get(pk) === team) n++;
+    }
     return n;
   }
 
   private placePlayerAtSpawn(id: string) {
     const p = this.players.get(id);
     if (!p) return;
-    const team = this.teamByConn.get(id) || "red";
+    const pk = this.connToPlayer.get(id);
+    const team = (pk ? this.teamByPlayer.get(pk) : undefined) || "red";
     const { W, H } = CONFIG;
     // Layout: grid of 2 rows x N columns on each side
     const idx = this.indexWithinTeam(id, team);
@@ -545,10 +601,18 @@ export default class Server {
   }
 
   private indexWithinTeam(id: string, team: "red" | "blue") {
-    const ids = Array.from(this.players.keys()).filter(
-      (k) => this.teamByConn.get(k) === team
-    );
-    ids.sort(); // stable-ish ordering
+    const ids = Array.from(this.players.keys()).filter((k) => {
+      const pk = this.connToPlayer.get(k);
+      return pk ? this.teamByPlayer.get(pk) === team : false;
+    });
+    // Sort by stable player key to keep slot ordering consistent across reconnects
+    ids.sort((a, b) => {
+      const pka = this.connToPlayer.get(a) || "";
+      const pkb = this.connToPlayer.get(b) || "";
+      if (pka < pkb) return -1;
+      if (pka > pkb) return 1;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
     return Math.max(0, ids.indexOf(id));
   }
 }
