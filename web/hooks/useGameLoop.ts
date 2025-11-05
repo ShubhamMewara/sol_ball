@@ -131,10 +131,10 @@ export function useGameLoop(
         ballYpx < H / 2 + goalHeightPx / 2;
       if (inGoalBand) {
         if (ballXpx < 0) {
-          useGameStore.getState().addGoal("left");
+          useGameStore.getState().addGoal("red");
           resetPositions(bodies, W, H);
         } else if (ballXpx > W) {
-          useGameStore.getState().addGoal("right");
+          useGameStore.getState().addGoal("blue");
           resetPositions(bodies, W, H);
         }
       }
