@@ -23,6 +23,7 @@ type StartOptions = {
   durationMin?: number;
   joinTeam?: "red" | "blue";
   teamSize?: number;
+  playerKey?: string;
 };
 
 export function useOnlineGame(
@@ -37,6 +38,11 @@ export function useOnlineGame(
   const serverOffsetRef = useRef<number>(0); // clientNow - serverNow estimate
   const offsetInitRef = useRef<boolean>(false);
   const bufferDelayMs = 120;
+  const optsRef = useRef<StartOptions>(opts);
+  const startSentRef = useRef<boolean>(false);
+  useEffect(() => {
+    optsRef.current = opts;
+  }, [opts]);
   // Extra reach in meters comes from config (sent by server). Fallback to 0.5.
 
   useEffect(() => {
@@ -44,7 +50,7 @@ export function useOnlineGame(
     if (!canvas) return;
 
     // Canvas and config
-  const { W, H, goalHeightPx } = useGameStore.getState().config;
+    const { W, H, goalHeightPx } = useGameStore.getState().config;
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -57,14 +63,16 @@ export function useOnlineGame(
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
+      const o = optsRef.current;
       // If a team is provided we are joining as a player; otherwise auto-join and let server assign team
-      if (opts.joinTeam) {
+      if (o.joinTeam) {
         socket.send(
           JSON.stringify({
             type: "join",
             name: "player",
-            team: opts.joinTeam,
-            teamSize: opts.teamSize,
+            team: o.joinTeam,
+            teamSize: o.teamSize,
+            playerKey: o.playerKey,
           })
         );
       } else {
@@ -72,26 +80,27 @@ export function useOnlineGame(
           JSON.stringify({
             type: "join",
             name: "player",
-            teamSize: opts.teamSize,
+            teamSize: o.teamSize,
+            playerKey: o.playerKey,
           })
         );
       }
       // Attempt to claim host if requested
-      if (opts.claimHostWallet) {
+      if (o.claimHostWallet) {
         socket.send(
           JSON.stringify({
             type: "claim-host",
-            wallet: opts.claimHostWallet,
+            wallet: o.claimHostWallet,
           })
         );
       }
       // Optionally start match immediately (host only; server enforces)
-      if (opts.startOnConnect) {
+      if (o.startOnConnect) {
         socket.send(
           JSON.stringify({
             type: "start",
-            durationMin: opts.durationMin || 3,
-            wallet: opts.claimHostWallet,
+            durationMin: o.durationMin || 3,
+            wallet: o.claimHostWallet,
           })
         );
       }
@@ -119,8 +128,8 @@ export function useOnlineGame(
           while (arr.length > 2 && arr[0].t < cutoff) arr.shift();
           // Update scoreboard in client store
           useGameStore.setState({
-            scoreLeft: s.score.left,
-            scoreRight: s.score.right,
+            scoreRed: s.score.red,
+            scoreBlue: s.score.blue,
           });
           // Optional phase/timer fields provided by server
           if (typeof (s as any).timeLeftMs === "number") {
@@ -130,13 +139,15 @@ export function useOnlineGame(
             useGameStore.setState({ phase: (s as any).phase });
           }
           if (typeof (s as any).goalCelebrationMsLeft === "number") {
-            useGameStore.setState({ celebrateMsLeft: (s as any).goalCelebrationMsLeft });
+            useGameStore.setState({
+              celebrateMsLeft: (s as any).goalCelebrationMsLeft,
+            });
           }
-          if ((s as any).lastGoalSide) {
-            useGameStore.setState({ lastGoalSide: (s as any).lastGoalSide });
+          if ((s as any).lastGoalTeam) {
+            useGameStore.setState({ lastGoalTeam: (s as any).lastGoalTeam });
           }
           if ((s as any).winner) {
-            useGameStore.setState({ winnerSide: (s as any).winner });
+            useGameStore.setState({ winnerTeam: (s as any).winner });
           }
         }
       } catch {
@@ -183,7 +194,7 @@ export function useOnlineGame(
     // Render loop with interpolation buffer
     let raf = 0;
     const frame = () => {
-  const ctx = ctxRef.current;
+      const ctx = ctxRef.current;
       const snaps = snapshotsRef.current;
       const {
         W: w,
@@ -199,7 +210,7 @@ export function useOnlineGame(
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = "#2e8b57";
       ctx.fillRect(0, 0, w, h);
-  drawPitch(ctx, w, h, gh, gd, pin);
+      drawPitch(ctx, w, h, gh, gd, pin);
 
       const target = Date.now() - serverOffsetRef.current - bufferDelayMs;
       let drawn = false;
@@ -232,10 +243,8 @@ export function useOnlineGame(
 
         // Players
         const r = useGameStore.getState().config.playerRadiusPx;
-        const ids = new Set([
-          ...Object.keys(a.players),
-          ...Object.keys(b.players),
-        ]);
+        // Use only current snapshot roster to avoid duplicate players on reconnects
+        const ids = new Set(Object.keys(b.players));
         const keys = useGameStore.getState().keys;
         const isKickingNow = !!(keys[" "] || keys["space"]);
         ids.forEach((id) => {
@@ -247,7 +256,14 @@ export function useOnlineGame(
           ctx.beginPath();
           ctx.arc(px * SCALE, py * SCALE, r, 0, Math.PI * 2);
           const team = (pb.team ?? pa.team) as "red" | "blue" | undefined;
-          const baseColor = team === "red" ? "red" : team === "blue" ? "dodgerblue" : id === meRef.current ? "red" : "dodgerblue";
+          const baseColor =
+            team === "red"
+              ? "red"
+              : team === "blue"
+              ? "dodgerblue"
+              : id === meRef.current
+              ? "red"
+              : "dodgerblue";
           if (id === meRef.current) {
             // Local player's disk: fill base color and draw kick radius only (no extra indicator)
             ctx.fillStyle = baseColor;
@@ -275,15 +291,13 @@ export function useOnlineGame(
           ctx.strokeStyle = isMe && isKickingNow ? "#ffffff" : "#000000";
           ctx.stroke();
 
-          // Draw jersey number
+          // Draw jersey number (stable if provided by server)
           ctx.fillStyle = "#fff";
           ctx.font = "bold 12px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          const num =
-            (Math.abs([...id].reduce((a, c) => a + c.charCodeAt(0), 0)) % 9) +
-            1; // 1-9 stable
-          ctx.fillText(String(num), px * SCALE, py * SCALE);
+          const jersey = (pb as any).num ?? (pa as any).num ?? ((Math.abs([...id].reduce((aa, c) => aa + c.charCodeAt(0), 0)) % 9) + 1);
+          ctx.fillText(String(jersey), px * SCALE, py * SCALE);
         });
         drawn = true;
       }
@@ -311,7 +325,7 @@ export function useOnlineGame(
 
         // Side banners
         const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-        const sideW = Math.floor((w * 0.22) * Math.sin(p * Math.PI));
+        const sideW = Math.floor(w * 0.22 * Math.sin(p * Math.PI));
         if (sideW > 0) {
           // Left banner
           const gradL = ctx.createLinearGradient(0, 0, sideW, 0);
@@ -340,20 +354,27 @@ export function useOnlineGame(
         ctx.strokeText("GOAL!", w / 2, h / 2 - 10);
         ctx.fillText("GOAL!", w / 2, h / 2 - 10);
 
-        // Subtext showing side
-        const sideLabel = st.lastGoalSide === "left" ? "Left Side" : st.lastGoalSide === "right" ? "Right Side" : "";
-        if (sideLabel) {
-          ctx.font = `600 ${Math.round(24 + 6 * ease(p))}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+        // Subtext showing team who scored
+        const teamLabel =
+          st.lastGoalTeam === "red"
+            ? "Red"
+            : st.lastGoalTeam === "blue"
+            ? "Blue"
+            : "";
+        if (teamLabel) {
+          ctx.font = `600 ${Math.round(
+            24 + 6 * ease(p)
+          )}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
           ctx.fillStyle = "#ffee58";
           ctx.strokeStyle = "rgba(0,0,0,0.5)";
           ctx.lineWidth = 4;
-          ctx.strokeText(sideLabel, w / 2, h / 2 + 34);
-          ctx.fillText(sideLabel, w / 2, h / 2 + 34);
+          ctx.strokeText(teamLabel, w / 2, h / 2 + 34);
+          ctx.fillText(teamLabel, w / 2, h / 2 + 34);
         }
         ctx.restore();
       }
 
-  raf = requestAnimationFrame(frame);
+      raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
 
@@ -369,4 +390,42 @@ export function useOnlineGame(
       meRef.current = null;
     };
   }, [canvasRef, roomName]);
+
+  // Late start: if options arrive after socket is open, send claim-host/start once
+  useEffect(() => {
+    const s = socketRef.current;
+    if (!s) return;
+    const o = optsRef.current;
+    if (o.claimHostWallet) {
+      s.send(
+        JSON.stringify({ type: "claim-host", wallet: o.claimHostWallet })
+      );
+    }
+    if (o.startOnConnect && !startSentRef.current) {
+      s.send(
+        JSON.stringify({
+          type: "start",
+          durationMin: o.durationMin || 3,
+          wallet: o.claimHostWallet,
+        })
+      );
+      startSentRef.current = true;
+    }
+  }, [opts.claimHostWallet, opts.startOnConnect, opts.durationMin]);
+
+  // API to trigger start from UI
+  const startMatch = (durationMin?: number) => {
+    const s = socketRef.current;
+    if (!s) return;
+    const o = optsRef.current;
+    s.send(
+      JSON.stringify({
+        type: "start",
+        durationMin: durationMin ?? o.durationMin ?? 3,
+        wallet: o.claimHostWallet,
+      })
+    );
+  };
+
+  return { startMatch };
 }

@@ -60,19 +60,11 @@ export default function LobbyWaitingModal({
     if (navigatedRef.current) return;
     navigatedRef.current = true;
     const mins = parseInt(String(matchDuration).replace(/[^0-9]/g, "")) || 3;
-    const params = new URLSearchParams({
-      start: isHost ? "1" : "0",
-      duration: String(mins),
-    });
-    if (selectedTeam) params.set("team", selectedTeam);
-
     // Add Api call
     // const pubkey = [new PublicKey("1221"), new PublicKey("12123132")];
 
     // const isValid = await join_match(pubkey, 0.0002);
-
-    params.set("teamSize", String(maxPlayersPerTeam));
-    router.push(`/game/${encodeURIComponent(roomId)}?${params.toString()}`);
+    router.push(`/game/${encodeURIComponent(roomId)}`);
   };
 
   const handleStartMatch = async () => {

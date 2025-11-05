@@ -1,37 +1,74 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useOnlineGame } from "../hooks/net/useOnlineGame";
 import { useGameStore } from "../store/gameStore";
+import { getLobbyByRoomId, getLobbyMembership } from "@/lib/lobbies";
 
 export default function PlanckGame({ room }: { room?: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  // Select primitives separately to avoid React 19 SSR getServerSnapshot caching warning
-  const scoreLeft = useGameStore((s) => s.scoreLeft);
-  const scoreRight = useGameStore((s) => s.scoreRight);
+  const scoreRed = useGameStore((s) => s.scoreRed);
+  const scoreBlue = useGameStore((s) => s.scoreBlue);
   const phase = useGameStore((s) => s.phase);
 
   function OnlineGame() {
-    const params = useSearchParams();
-    const start = params?.get("start") === "1";
-    const duration = params?.get("duration");
     const { user } = usePrivy();
-    const wallet = user?.wallet?.address || user?.id || undefined;
-    const team = params?.get("team") as "red" | "blue" | null;
-    const teamSizeParam = params?.get("teamSize");
-    const teamSize = teamSizeParam
-      ? Math.max(1, parseInt(teamSizeParam))
-      : undefined;
-    useOnlineGame(canvasRef, room || "default", {
-      claimHostWallet: start ? wallet : undefined,
-      startOnConnect: start,
-      durationMin: duration ? parseInt(duration) || 3 : 3,
-      joinTeam: team || undefined,
-      teamSize,
-    });
+    const wallet = user?.wallet?.address || undefined;
+    const userId = user?.id || wallet; // fallback if needed
+
+    const [opts, setOpts] = useState<{
+      claimHostWallet?: string;
+      startOnConnect?: boolean;
+      durationMin?: number;
+      joinTeam?: "red" | "blue";
+      teamSize?: number;
+      playerKey?: string;
+    }>({});
+
+    useEffect(() => {
+      let cancel = false;
+      (async () => {
+        try {
+          const roomId = room || "default";
+          const lobby = await getLobbyByRoomId(roomId);
+          if (!lobby) {
+            setOpts({});
+            return;
+          }
+
+          // Fetch my membership to determine team
+          let myTeam: "red" | "blue" | undefined = undefined;
+          if (userId) {
+            const membership = await getLobbyMembership(lobby.id, userId);
+            if (membership?.team === "red" || membership?.team === "blue")
+              myTeam = membership.team;
+          }
+
+          // Only claim host if my wallet matches lobby.host (no URL param)
+          const canHost = !!(wallet && lobby.host && wallet === lobby.host);
+          // Do not auto-start from params; leave startOnConnect false.
+          // Duration and team size come from DB.
+          const next = {
+            claimHostWallet: canHost ? wallet : undefined,
+            // Auto-start when host enters
+            startOnConnect: canHost,
+            durationMin: lobby.match_minutes ?? 3,
+            joinTeam: myTeam,
+            teamSize: lobby.players ?? undefined,
+            playerKey: wallet || userId,
+          } as const;
+          if (!cancel) setOpts(next);
+        } catch {
+          if (!cancel) setOpts({});
+        }
+      })();
+      return () => {
+        cancel = true;
+      };
+    }, [room, userId, wallet]);
+
+    useOnlineGame(canvasRef, room || "default", opts);
     return null;
   }
 
@@ -52,7 +89,7 @@ export default function PlanckGame({ room }: { room?: string }) {
 
               {/* HUD overlay inside canvas bounds */}
               <div className="pointer-events-none absolute inset-x-0 top-0 px-4 pt-3">
-                <ScoreAndTimer scoreLeft={scoreLeft} scoreRight={scoreRight} />
+                <ScoreAndTimer scoreRed={scoreRed} scoreBlue={scoreBlue} />
               </div>
               <div className="pointer-events-none absolute inset-x-0 bottom-0 px-4 pb-3">
                 <ControlsHint />
@@ -139,11 +176,10 @@ function TimerBar() {
 
 function GameOverOverlay() {
   const phase = useGameStore((s) => s.phase);
-  const left = useGameStore((s) => s.scoreLeft);
-  const right = useGameStore((s) => s.scoreRight);
+  const red = useGameStore((s) => s.scoreRed);
+  const blue = useGameStore((s) => s.scoreBlue);
   if (phase !== "ended") return null;
-  const result =
-    left === right ? "Draw" : left > right ? "Left Wins" : "Right Wins";
+  const result = red === blue ? "Draw" : red > blue ? "Red Wins" : "Blue Wins";
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-black/70 text-emerald-50">
       <div className="rounded-xl border border-emerald-700/50 bg-emerald-900/40 px-8 py-6 text-center shadow-2xl backdrop-blur-md">
@@ -154,7 +190,7 @@ function GameOverOverlay() {
           {result}
         </div>
         <div className="text-lg font-semibold">
-          Final Score: {left} - {right}
+          Final Score: {red} - {blue}
         </div>
       </div>
     </div>
@@ -162,11 +198,11 @@ function GameOverOverlay() {
 }
 
 function ScoreAndTimer({
-  scoreLeft,
-  scoreRight,
+  scoreRed,
+  scoreBlue,
 }: {
-  scoreLeft: number;
-  scoreRight: number;
+  scoreRed: number;
+  scoreBlue: number;
 }) {
   return (
     <div className="mx-auto max-w-lg rounded-lg border border-emerald-700/60 bg-emerald-950/50 px-3 py-2 shadow-md backdrop-blur-md">
@@ -178,7 +214,7 @@ function ScoreAndTimer({
             Red
           </span>
           <span className="text-2xl font-black tabular-nums text-rose-100">
-            {scoreLeft}
+            {scoreRed}
           </span>
         </div>
         {/* Timer */}
@@ -188,7 +224,7 @@ function ScoreAndTimer({
         {/* Right team */}
         <div className="flex items-center gap-2">
           <span className="text-2xl font-black tabular-nums text-sky-100">
-            {scoreRight}
+            {scoreBlue}
           </span>
           <span className="text-xs uppercase tracking-wider text-sky-200/90">
             Blue
