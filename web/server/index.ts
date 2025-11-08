@@ -1,12 +1,20 @@
-import type * as Party from "partykit/server";
+// migrated from "partykit/server" to "partyserver"; room is untyped to avoid depending on PartyKit types
 import planck from "planck-js";
 import { createBall } from "./game/ball";
 import { CONFIG, SCALE } from "./game/constants";
 import { createPlayer } from "./game/players";
 import { createWalls, createWorld } from "./game/world";
 import { kick } from "./game/kick";
+import type { Connection, ConnectionContext } from "partyserver";
+import { routePartykitRequest, Server } from "partyserver";
+export class Globe extends Server {
+  // Let's use hibernation mode so we can scale to thousands of connections
+  static options = { hibernate: true };
 
-export default class Server {
+  // Maintain our own set of live connections and an optional room id
+  private conns: Set<Connection> = new Set();
+  private roomId?: string;
+
   world: planck.World;
   players: Map<string, planck.Body> = new Map();
   ball: planck.Body;
@@ -31,7 +39,8 @@ export default class Server {
   private lastGoalTeam: "red" | "blue" | null = null;
   private startRequested = false;
 
-  constructor(public room: Party.Room) {
+  constructor(state: any, env: any) {
+    super(state, env);
     // Initialize world
     this.world = createWorld();
     createWalls(
@@ -87,7 +96,7 @@ export default class Server {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
-                roomId: this.room.id,
+                roomId: this.roomId || "",
                 winner: winnerTeam,
               }),
             }).catch(() => {});
@@ -121,7 +130,8 @@ export default class Server {
     }
   }
 
-  onConnect(conn: any, _ctx?: any) {
+  onConnect(conn: Connection, _ctx?: ConnectionContext) {
+    this.conns.add(conn);
     const body = createPlayer(this.world, CONFIG.playerRadiusPx);
     this.players.set(conn.id, body);
     // If no host yet, tentatively set first connector as host (may be overridden by claim-host)
@@ -132,15 +142,15 @@ export default class Server {
       JSON.stringify({
         type: "welcome",
         id: conn.id,
-        room: this.room.id,
+        room: this.roomId || "",
         config: CONFIG,
       })
     );
   }
 
-  onMessage(message: string, sender: any) {
+  onMessage(conn: Connection, message: any) {
     try {
-      const msg = JSON.parse(message);
+      const msg = JSON.parse(String(message));
       if (msg.type === "join") {
         // Optionally receive team and teamSize
         const preferred: "red" | "blue" | undefined = msg.team;
@@ -149,15 +159,15 @@ export default class Server {
           this.maxPlayersPerTeam = Math.floor(teamSize);
         }
         // If previously marked spectator, unmark
-        this.spectators.delete(sender.id);
+        this.spectators.delete(conn.id);
         // Stable player identity for team persistence (wallet/user id recommended)
         const playerKey: string = String(
-          msg.playerKey || msg.wallet || sender.id
+          msg.playerKey || msg.wallet || conn.id
         );
-        const prevKey = this.connToPlayer.get(sender.id);
+        const prevKey = this.connToPlayer.get(conn.id);
         // If same player reconnects, drop old connection/body
         for (const [cid, pk] of this.connToPlayer.entries()) {
-          if (pk === playerKey && cid !== sender.id) {
+          if (pk === playerKey && cid !== conn.id) {
             const old = this.players.get(cid);
             if (old) this.world.destroyBody(old);
             this.players.delete(cid);
@@ -179,27 +189,27 @@ export default class Server {
           assigned = this.assignTeam(playerKey, preferred);
           this.teamByPlayer.set(playerKey, assigned);
         }
-        this.connToPlayer.set(sender.id, playerKey);
+        this.connToPlayer.set(conn.id, playerKey);
         // Ensure a player body exists
-        if (!this.players.has(sender.id)) {
+        if (!this.players.has(conn.id)) {
           const body = createPlayer(this.world, CONFIG.playerRadiusPx);
-          this.players.set(sender.id, body);
+          this.players.set(conn.id, body);
         }
         // Place the player at a spawn
-        this.placePlayerAtSpawn(sender.id);
+        this.placePlayerAtSpawn(conn.id);
         // Try starting if a request exists
         this.maybeStart();
         return;
       }
       if (msg.type === "spectate") {
         // Convert this connection to spectator: remove any player body and team mapping
-        const b = this.players.get(sender.id);
+        const b = this.players.get(conn.id);
         if (b) {
           this.world.destroyBody(b);
-          this.players.delete(sender.id);
+          this.players.delete(conn.id);
         }
-        this.connToPlayer.delete(sender.id);
-        this.spectators.add(sender.id);
+        this.connToPlayer.delete(conn.id);
+        this.spectators.add(conn.id);
         return;
       }
       if (msg.type === "claim-host") {
@@ -211,12 +221,12 @@ export default class Server {
         // Only host can start
         const isHost =
           (this.hostWallet && msg.wallet && this.hostWallet === msg.wallet) ||
-          (!this.hostWallet && this.hostConnId === sender.id);
+          (!this.hostWallet && this.hostConnId === conn.id);
         if (!isHost) return;
         this.requestStart(Number(msg.durationMin) || this.matchDurationMin);
       } else if (msg.type === "inputs") {
         const keys = msg.keys || {};
-        const actor = this.players.get(sender.id);
+        const actor = this.players.get(conn.id);
         // Only apply movement/kick while playing; still advance timers/broadcast below
         if (this.phase === "playing" && actor) {
           // Compute desired direction from keys
@@ -290,7 +300,7 @@ export default class Server {
     this.startMatch(dur);
   }
 
-  onClose(conn: any, _ctx?: any) {
+  onClose(conn: Connection, _ctx?: any) {
     const b = this.players.get(conn.id);
     if (b) this.world.destroyBody(b);
     this.players.delete(conn.id);
@@ -299,7 +309,7 @@ export default class Server {
     if (!this.hostWallet && this.hostConnId === conn.id) {
       // reassign hostConnId to another active connection if any
       let nextId: string | null = null;
-      for (const c of this.room.getConnections()) {
+      for (const c of this.conns) {
         if (c.id !== conn.id) {
           nextId = c.id;
           break;
@@ -514,7 +524,7 @@ export default class Server {
     };
 
     // Send to everyone, adding their own id in the message
-    for (const c of this.room.getConnections()) {
+    for (const c of this.conns) {
       const enriched = { ...payload, me: c.id };
       c.send(JSON.stringify(enriched));
     }
@@ -542,7 +552,7 @@ export default class Server {
         fetch(`${base.replace(/\/$/, "")}/api/match/start`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ roomId: this.room.id }),
+          body: JSON.stringify({ roomId: this.roomId || "" }),
         }).catch(() => {});
       }
     }
@@ -617,4 +627,14 @@ export default class Server {
   }
 }
 
-export { Server as GameRoom };
+export default {
+  async fetch(request: Request, env: any): Promise<Response> {
+    return (
+      (await routePartykitRequest(request, env)) ||
+      new Response("Not Found", { status: 404 })
+    );
+  },
+};
+
+// Bind the Durable Object class name expected by wrangler.toml
+export { Globe as GameRoom };

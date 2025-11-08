@@ -59,7 +59,11 @@ export function useOnlineGame(
 
     // Connect to PartyKit room
     const host = getHost();
-    const socket = new PartySocket({ host, room: roomName || "default" });
+    const socket = new PartySocket({
+      host,
+      room: roomName || "default",
+      party: "globe",
+    });
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {

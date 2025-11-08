@@ -1,10 +1,14 @@
-name = "solball"
+name = "sollball"
 main = "server/index.ts"
-compatibility_date = "2024-11-01"
+compatibility_date = "2024-04-19"
 
-[durable_objects]
-bindings = [{ name = "GameRoom", class_name = "GameRoom" }]
+assets = { directory = "./public" }
+
+
+[[durable_objects.bindings]]
+name = "Globe"
+class_name = "Globe"
 
 [[migrations]]
-tag = "v1"
-new_sqlite_classes = ["GameRoom"]
+tag = "v1"                     # Should be unique for each entry
+new_sqlite_classes = ["Globe"]
