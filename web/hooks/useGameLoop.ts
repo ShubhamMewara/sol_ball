@@ -74,7 +74,9 @@ export function useGameLoop(
           const ny = dist > 0 ? dy / dist : 0;
           const target = sumR + SEP;
           if (dist < target) {
-            bodies.ball.setPosition(planck.Vec2(pp.x + nx * target, pp.y + ny * target));
+            bodies.ball.setPosition(
+              planck.Vec2(pp.x + nx * target, pp.y + ny * target)
+            );
           }
           const vbN = bv0.x * nx + bv0.y * ny;
           const vpN = pv.x * nx + pv.y * ny;
@@ -161,7 +163,7 @@ export function useGameLoop(
       ctx.strokeStyle = "rgba(255,255,255,0.35)";
       ctx.stroke();
       ctx.restore();
-  // No caret above the disk
+      // No caret above the disk
       // Thin outline (white while space pressed)
       ctx.beginPath();
       ctx.arc(ppos.x * SCALE, ppos.y * SCALE, playerRadiusPx, 0, Math.PI * 2);
