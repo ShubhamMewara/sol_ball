@@ -53,6 +53,7 @@ export default function GameCard({
               {(stake / LAMPORTS_PER_SOL).toFixed(4)} SOL
             </span>
           </div>
+          <div>Host:</div>
         </div>
 
         {/* Teams */}

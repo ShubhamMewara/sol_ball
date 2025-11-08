@@ -80,32 +80,39 @@ export type Database = {
             referencedRelation: "lobbies"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lobby_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["wallet_key"]
+          },
         ]
       }
       profile: {
         Row: {
           avatar_url: string | null
+          balance_lamports: number
           created_at: string
           id: string
           username: string | null
           wallet_key: string
-          balance_lamports: number
         }
         Insert: {
           avatar_url?: string | null
+          balance_lamports?: number
           created_at?: string
           id?: string
           username?: string | null
           wallet_key: string
-          balance_lamports?: number
         }
         Update: {
           avatar_url?: string | null
+          balance_lamports?: number
           created_at?: string
           id?: string
           username?: string | null
           wallet_key?: string
-          balance_lamports?: number
         }
         Relationships: []
       }

@@ -5,12 +5,13 @@ import { usePrivy } from "@privy-io/react-auth";
 import { joinLobby, startLobby, getLobbyIdByRoomId } from "@/lib/lobbies";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/supabase/client";
-import { join_match } from "@/server/contract";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { toast } from "sonner";
 
 interface Player {
   name: string;
   isCurrentUser: boolean;
+  username?: string;
 }
 
 interface LobbyWaitingModalProps {
@@ -132,20 +133,19 @@ export default function LobbyWaitingModal({
       try {
         const { data, error } = await supabase
           .from("lobby_members")
-          .select("user_id, team")
+          .select("*, profile(*)")
           .eq("lobby_room_id", lobbyUuid);
         if (error) throw error;
         if (!active) return;
+        if (!data) return;
         const red: Player[] = [];
         const blue: Player[] = [];
         for (const row of data || []) {
-          const label =
-            row.user_id.length > 10
-              ? `${row.user_id.slice(0, 4)}…${row.user_id.slice(-4)}`
-              : row.user_id;
+          const label = row.profile?.wallet_key;
           const p: Player = {
             name: label,
             isCurrentUser: row.user_id === myId,
+            username: row.profile?.username ?? `Guest`,
           };
           (row.team === "red" ? red : blue).push(p);
         }
@@ -333,7 +333,7 @@ export default function LobbyWaitingModal({
                   >
                     {player ? (
                       <span>
-                        {player.name} {player.isCurrentUser && "(YOU)"}
+                        {player.username} {player.isCurrentUser && "(YOU)"}
                       </span>
                     ) : (
                       "Empty"
