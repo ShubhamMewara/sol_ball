@@ -5,6 +5,7 @@ import { DynaPuff } from "next/font/google";
 import { NavTabs } from "@/components/NavTabs";
 import ProfileProvider from "@/providers/ProfileProvider";
 import { Toaster } from "sonner";
+import { WelcomeAlert } from "@/components/welcome-alert";
 
 const dynapuff = DynaPuff({
   subsets: ["latin"], // adjust subsets if needed
@@ -76,6 +77,7 @@ export default function RootLayout({
             <NavTabs />
             {children}
             <Toaster />
+            <WelcomeAlert />
           </ProfileProvider>
         </PrivvyProvider>
       </body>
