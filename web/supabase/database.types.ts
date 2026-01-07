@@ -14,6 +14,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      global_chat: {
+        Row: {
+          created_at: string
+          id: number
+          profile_id: string | null
+          text: string | null
+          username: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          profile_id?: string | null
+          text?: string | null
+          username?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          profile_id?: string | null
+          text?: string | null
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_chat_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lobbies: {
         Row: {
           created_at: string

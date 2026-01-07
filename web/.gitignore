@@ -11,6 +11,7 @@
 !.yarn/versions
 
 .partykit
+.wrangler
 
 # testing
 /coverage

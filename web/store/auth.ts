@@ -1,6 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { Connection } from "@solana/web3.js";
+import { Tables } from "@/supabase/database.types";
 
 interface User {
   wallet_key: string | null;
@@ -9,8 +10,8 @@ interface User {
 }
 
 export type AuthStore = {
-  user?: User;
-  setUser: (user: User | undefined) => void;
+  profile: Tables<"profile"> | null;
+  setProfile: (profile: Tables<"profile"> | undefined) => void;
   balance?: number;
   setBalance: (balance: number) => void;
   connection: Connection | null;
@@ -20,8 +21,8 @@ export type AuthStore = {
 };
 
 export const useAuth = create<AuthStore>((set, get) => ({
-  user: undefined,
-  setUser: (user: User | undefined) => set({ user }),
+  profile: null,
+  setProfile: (profile: Tables<"profile"> | undefined) => set({ profile }),
   balance: undefined,
   setBalance: (balance: number) => set({ balance }),
   connection: null,

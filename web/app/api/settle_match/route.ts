@@ -7,12 +7,16 @@ import {
   PublicKey,
   Transaction,
 } from "@solana/web3.js";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import IDL from "@/compiled/solball.json";
+import { SettleMatchBody } from "@/lib/schemas";
+import { parseJson } from "@/lib/http";
 
 export async function POST(req: NextRequest) {
   try {
-    const { pubKeys, winner_share } = await req.json();
+    const parsed = await parseJson(req, SettleMatchBody);
+    if ("error" in parsed) return parsed.error;
+    const { pubKeys, winner_share } = parsed.data;
     const connection = new Connection(clusterApiUrl("devnet"));
     const secret = JSON.parse(process.env.WALLET!);
     const walletKeypair = Keypair.fromSecretKey(Uint8Array.from(secret));
@@ -23,7 +27,7 @@ export async function POST(req: NextRequest) {
       connection: connection,
       publicKey: new PublicKey(selectedWallet.publicKey),
     });
-    const playerSubAccounts: [PublicKey] = pubKeys.map((wallet: string) => {
+    const playerSubAccounts: PublicKey[] = pubKeys.map((wallet: string) => {
       const [pda] = PublicKey.findProgramAddressSync(
         [Buffer.from("user_sub_account"), new PublicKey(wallet).toBuffer()],
         new PublicKey(IDL.address)
@@ -51,8 +55,8 @@ export async function POST(req: NextRequest) {
       lastValidBlockHeight: bx.lastValidBlockHeight,
     }).add(ix);
     const res = await connection.simulateTransaction(tx);
-    console.log(res);
-
-    console.log("Transaction sent with signature:", res);
-  } catch (error) {}
+    return NextResponse.json({ ok: true, simulation: res });
+  } catch (error) {
+    return NextResponse.json({ error: String((error as any)?.message || error) }, { status: 500 });
+  }
 }

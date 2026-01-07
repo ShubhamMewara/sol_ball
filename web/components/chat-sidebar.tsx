@@ -1,36 +1,88 @@
 "use client";
 
 import type React from "react";
-
-import { useState, useEffect, useRef } from "react";
-import { Button } from "./ui/button";
-import { MessagesSquare, Send } from "lucide-react";
-import { usePrivy } from "@privy-io/react-auth";
 import { useAuth } from "@/store/auth";
-import { createClient, RealtimeChannel } from "@supabase/supabase-js";
-
-// Replace with your Supabase credentials
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "YOUR_SUPABASE_URL";
-const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY";
+import { supabase } from "@/supabase/client";
+import { Tables } from "@/supabase/database.types";
+import { usePrivy } from "@privy-io/react-auth";
+import {
+  RealtimeChannel,
+  type RealtimePostgresInsertPayload,
+} from "@supabase/supabase-js";
+import {
+  Loader2,
+  MessageSquare,
+  Send,
+  Wifi,
+  WifiOff,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Users,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: number;
   profile_id: string | null;
   username: string;
-  text: string;
+  text: string | null;
   created_at: string;
 }
 
-interface Profile {
+interface SupabaseProfile {
   id: string;
-  username?: string;
-  wallet_address?: string;
+  username?: string | null;
+  wallet_key?: string | null;
 }
 
+interface GlobalChatRow {
+  id: number;
+  profile_id: string | null;
+  text: string;
+  created_at: string;
+  username?: string | null;
+  display_name?: string | null;
+  wallet_key?: string | null;
+  profile?: SupabaseProfile | null;
+}
+
+const resolveUsername = (
+  payload: GlobalChatRow | Tables<"global_chat">
+): string => {
+  if ("profile" in payload && payload.profile) {
+    return (
+      payload.profile.username ||
+      payload.profile.wallet_key ||
+      payload.profile.id.slice(0, 6)
+    );
+  }
+
+  const displayName =
+    "display_name" in payload ? payload.display_name : undefined;
+  const walletKey = "wallet_key" in payload ? payload.wallet_key : undefined;
+
+  return (
+    payload.username ||
+    displayName ||
+    walletKey ||
+    (payload.profile_id ? `User_${payload.profile_id.slice(0, 4)}` : null) ||
+    "Anonymous"
+  );
+};
+
+const formatMessage = (msg: GlobalChatRow): Message => ({
+  id: msg.id,
+  profile_id: msg.profile_id,
+  username: resolveUsername(msg),
+  text: msg.text,
+  created_at: msg.created_at,
+});
+
 export default function ChatSidebar() {
-  const { toggleChat, settoggleChat } = useAuth();
+  const { toggleChat, settoggleChat, profile } = useAuth();
   const { authenticated, user } = usePrivy();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -38,235 +90,156 @@ export default function ChatSidebar() {
   const [onlineCount, setOnlineCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState("Connecting...");
+  const [hasError, setHasError] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
-  // Get username from Privy user or generate anonymous name
-  const getUsername = () => {
-    if (!user) return `Guest_${Math.floor(Math.random() * 9999)}`;
+  const canChat = authenticated && Boolean(profile?.username);
+  const presenceKey = user?.wallet?.address ?? "Guest";
 
-    if (user.email?.address) return user.email.address.split("@")[0];
-    if (user.twitter?.username) return user.twitter.username;
-    if (user.discord?.username) return user.discord.username;
-    if (user.wallet?.address)
-      return `${user.wallet.address.slice(0, 6)}...${user.wallet.address.slice(
-        -4
-      )}`;
-
-    return `User_${Math.floor(Math.random() * 9999)}`;
-  };
-
-  const username = getUsername();
-
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   // Load initial messages from database
-  const loadMessages = async (supabase: ReturnType<typeof createClient>) => {
+  const loadMessages = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("global_chat")
-        .select(
-          `
-          id,
-          profile_id,
-          text,
-          created_at,
-          profile:profile_id (
-            id,
-            username,
-            wallet_key
-          )
-        `
-        )
+        .select("*")
         .order("created_at", { ascending: true })
         .limit(100);
 
       if (error) {
         console.error("Error loading messages:", error);
+        setHasError(true);
+        setStatusMessage("Failed to load history");
         return;
       }
 
       if (data) {
-        const formattedMessages = data.map((msg: any) => ({
-          id: msg.id,
-          profile_id: msg.profile_id,
-          username:
-            msg.profile?.username || msg.profile?.wallet_key || "Anonymous",
-          text: msg.text,
-          created_at: msg.created_at,
-        }));
-
+        const formattedMessages = (data as GlobalChatRow[]).map(formatMessage);
         setMessages(formattedMessages);
-        console.log("Loaded messages:", formattedMessages.length);
       }
     } catch (error) {
       console.error("Error in loadMessages:", error);
+      setHasError(true);
+      setStatusMessage("Failed to load history");
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const updatePresenceCount = (channel: RealtimeChannel) => {
+    const state = channel.presenceState();
+    setOnlineCount(Object.keys(state).length);
   };
 
   // Initialize Supabase and connect to chat
-  useEffect(() => {
-    const initializeChat = async () => {
-      try {
-        // Initialize Supabase client
-        if (!supabaseRef.current) {
-          supabaseRef.current = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            realtime: {
-              params: {
-                eventsPerSecond: 10,
-              },
-            },
-          });
-        }
+  const initializeChat = useCallback(async () => {
+    try {
+      setStatusMessage("Connecting...");
+      setHasError(false);
 
-        const supabase = supabaseRef.current;
+      await loadMessages();
 
-        // Load existing messages
-        await loadMessages(supabase);
-
-        // Unsubscribe from previous channel if exists
-        if (channelRef.current) {
-          await channelRef.current.unsubscribe();
-        }
-
-        // Create a channel for global chat with both DB changes and presence
-        const channel = supabase
-          .channel("global_chat", {
-            config: {
-              broadcast: { self: true },
-              presence: { key: username },
-            },
-          })
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "global_chat",
-            },
-            async (payload) => {
-              console.log("New message received via realtime:", payload);
-
-              // Fetch the complete message with profile info
-              const { data, error } = await supabase
-                .from("global_chat")
-                .select(
-                  `
-                  id,
-                  profile_id,
-                  text,
-                  created_at,
-                  profile:profile_id (
-                    id,
-                    username,
-                    wallet_key
-                  )
-                `
-                )
-                .eq("id", payload.new.id)
-                .single();
-
-              if (error) {
-                console.error("Error fetching message details:", error);
-                return;
-              }
-
-              if (data) {
-                console.log("Fetched message details:", data);
-                const newMessage: Message = {
-                  id: data.id,
-                  profile_id: data.profile_id,
-                  username:
-                    data.profile?.username ||
-                    data.profile?.wallet_key ||
-                    "Anonymous",
-                  text: data.text,
-                  created_at: data.created_at,
-                };
-
-                setMessages((prev) => {
-                  // Avoid duplicates
-                  if (prev.some((msg) => msg.id === newMessage.id)) {
-                    console.log("Message already exists, skipping");
-                    return prev;
-                  }
-                  console.log("Adding new message to state");
-                  return [...prev, newMessage];
-                });
-              }
-            }
-          )
-          .on("presence", { event: "sync" }, () => {
-            const state = channel.presenceState();
-            const count = Object.keys(state).length;
-            setOnlineCount(count);
-            console.log("Online users:", count);
-          })
-          .on("presence", { event: "join" }, ({ key }) => {
-            console.log("User joined:", key);
-            const state = channel.presenceState();
-            setOnlineCount(Object.keys(state).length);
-          })
-          .on("presence", { event: "leave" }, ({ key }) => {
-            console.log("User left:", key);
-            const state = channel.presenceState();
-            setOnlineCount(Object.keys(state).length);
-          });
-
-        // Subscribe and track presence
-        await channel.subscribe(async (status) => {
-          console.log("Channel status:", status);
-
-          if (status === "SUBSCRIBED") {
-            const presenceKey = authenticated
-              ? username
-              : `Guest_${Math.random().toString(36).substr(2, 9)}`;
-            await channel.track({
-              username: presenceKey,
-              online_at: new Date().toISOString(),
-            });
-            setIsConnected(true);
-            console.log("Connected to channel as:", presenceKey);
-          }
-
-          if (status === "CHANNEL_ERROR") {
-            console.error("Channel error, attempting reconnect...");
-            setIsConnected(false);
-            reconnectTimeoutRef.current = setTimeout(() => {
-              initializeChat();
-            }, 2000);
-          }
-
-          if (status === "TIMED_OUT") {
-            console.error("Channel timed out, attempting reconnect...");
-            setIsConnected(false);
-            reconnectTimeoutRef.current = setTimeout(() => {
-              initializeChat();
-            }, 2000);
-          }
-        });
-
-        channelRef.current = channel;
-      } catch (error) {
-        console.error("Error initializing chat:", error);
-        setIsLoading(false);
+      if (channelRef.current) {
+        await channelRef.current.unsubscribe();
       }
-    };
 
+      const channel = supabase
+        .channel("global_chat", {
+          config: {
+            broadcast: { self: true },
+            presence: { key: presenceKey },
+          },
+        })
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "global_chat",
+          },
+          (payload: RealtimePostgresInsertPayload<Tables<"global_chat">>) => {
+            const payloadData = payload.new;
+            const newMessage: Message = {
+              id: payloadData.id,
+              profile_id: payloadData.profile_id,
+              username: resolveUsername(payloadData),
+              text: payloadData.text,
+              created_at: payloadData.created_at,
+            };
+
+            setMessages((prev) =>
+              prev.some((msg) => msg.id === newMessage.id)
+                ? prev
+                : [...prev, newMessage]
+            );
+          }
+        )
+        .on("presence", { event: "sync" }, () => updatePresenceCount(channel))
+        .on("presence", { event: "join" }, () => updatePresenceCount(channel))
+        .on("presence", { event: "leave" }, () => updatePresenceCount(channel));
+
+      const scheduleReconnect = () => {
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+        reconnectTimeoutRef.current = setTimeout(() => {
+          setStatusMessage("Reconnecting...");
+          initializeChat();
+        }, 2000);
+      };
+
+      channel.subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            username: presenceKey,
+            online_at: new Date().toISOString(),
+          });
+          setIsConnected(true);
+          setStatusMessage("Connected");
+          setHasError(false);
+        }
+
+        if (status === "CHANNEL_ERROR") {
+          setIsConnected(false);
+          setHasError(true);
+          setStatusMessage("Connection lost");
+          scheduleReconnect();
+        }
+
+        if (status === "TIMED_OUT") {
+          setIsConnected(false);
+          setHasError(true);
+          setStatusMessage("Timed out");
+          scheduleReconnect();
+        }
+      });
+
+      channelRef.current = channel;
+    } catch (error) {
+      console.error("Error initializing chat:", error);
+      setStatusMessage("Connection failed");
+      setHasError(true);
+      setIsLoading(false);
+    }
+  }, [presenceKey, loadMessages]);
+
+  useEffect(() => {
     initializeChat();
 
-    // Cleanup on unmount
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -275,61 +248,43 @@ export default function ChatSidebar() {
         channelRef.current.unsubscribe();
       }
     };
-  }, [authenticated, username]);
+  }, [initializeChat]);
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() || !supabaseRef.current) return;
-
-    const supabase = supabaseRef.current;
+    if (!inputValue.trim() || isSending) return;
+    if (!canChat) {
+      setStatusMessage("Username required");
+      setHasError(true);
+      return;
+    }
 
     try {
-      let profileId = null;
+      setIsSending(true);
 
-      // If authenticated, get profile_id from profile table using wallet_address
-      if (authenticated && user?.wallet?.address) {
-        console.log("Looking up profile for wallet:", user.wallet.address);
-
-        const { data: existingProfile, error: profileError } = await supabase
-          .from("profile")
-          .select("id, username, wallet_key")
-          .eq("wallet_key", user.wallet.address)
-          .single();
-
-        if (profileError) {
-          console.error("Error fetching profile:", profileError);
-        } else if (existingProfile) {
-          profileId = existingProfile.id;
-          console.log("Found profile:", existingProfile);
-        } else {
-          console.log("No profile found for wallet:", user.wallet.address);
-        }
-      }
-
-      console.log("Sending message with profile_id:", profileId);
-
-      // Insert message into database - this will trigger the realtime update
-      const { data, error } = await supabase
-        .from("global_chat")
-        .insert({
-          profile_id: profileId,
-          text: inputValue.trim(),
-        })
-        .select()
-        .single();
+      const { error } = await supabase.from("global_chat").insert({
+        profile_id: profile?.id ?? null,
+        text: inputValue.trim(),
+        username: profile?.username ?? "Anonymous",
+      });
 
       if (error) {
         console.error("Error sending message:", error);
+        setStatusMessage("Failed to send");
+        setHasError(true);
         return;
       }
 
-      console.log("Message inserted successfully:", data);
       setInputValue("");
     } catch (error) {
       console.error("Error in handleSendMessage:", error);
+      setStatusMessage("Failed to send");
+      setHasError(true);
+    } finally {
+      setIsSending(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -337,90 +292,173 @@ export default function ChatSidebar() {
   };
 
   return (
-    <div className="flex">
-      {!toggleChat && (
-        <div className="w-72 bg-[#1a1b24] rounded-lg border-b-4 border-[#7ACD54] p-6 h-[80vh] max-h-[1000px] overflow-y-auto shadow-lg shadow-[#7ACD54]/10 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-white font-bold text-sm tracking-wide">
+    <div
+      className={cn(
+        "sticky top-0 flex flex-col border-2 border-border/40 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 transition-all duration-300 ease-in-out h-[calc(100vh-12rem)] rounded-2xl",
+        toggleChat ? "w-14" : "w-80"
+      )}
+    >
+      {/* Header */}
+      <div className="h-14 border-b border-border/40 flex items-center justify-between px-3 shrink-0">
+        {!toggleChat && (
+          <div className="flex items-center gap-2 overflow-hidden">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <span className="font-bold text-sm tracking-wide truncate">
               GLOBAL CHAT
-            </h3>
-            <div className="flex items-center gap-2">
-              {isConnected && (
-                <span className="w-2 h-2 bg-[#7ACD54] rounded-full animate-pulse"></span>
-              )}
-              <span className="text-[#7ACD54] text-xs font-semibold">
-                {onlineCount} ACTIVE
-              </span>
-            </div>
+            </span>
           </div>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("h-8 w-8", toggleChat && "mx-auto")}
+          onClick={() => settoggleChat(!toggleChat)}
+        >
+          {toggleChat ? (
+            <PanelLeftOpen className="w-4 h-4" />
+          ) : (
+            <PanelLeftClose className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
 
-          <div className="space-y-4 flex-1 overflow-y-auto mb-4 chat-scroll">
-            {isLoading ? (
-              <div className="text-center text-[#7ACD54]/50 text-sm mt-8">
-                Loading messages...
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="text-center text-[#7ACD54]/50 text-sm mt-8">
-                No messages yet. Start the conversation!
-              </div>
+      {/* Online Count (Only visible when open) */}
+      {!toggleChat && (
+        <div className="px-4 py-2 border-b border-border/40 bg-muted/20 flex items-center justify-between text-xs text-muted-foreground shrink-0">
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "w-2 h-2 rounded-full",
+                isConnected ? "bg-primary animate-pulse" : "bg-destructive"
+              )}
+            />
+            <span>{onlineCount} Online</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {isConnected ? (
+              <Wifi className="w-3 h-3" />
             ) : (
-              messages.map((msg) => (
+              <WifiOff className="w-3 h-3" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Messages Area */}
+      {!toggleChat ? (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 chat-scroll min-h-0">
+          {isLoading ? (
+            <div className="space-y-4 mt-2">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div
+                  key={`skeleton-${idx}`}
+                  className={cn(
+                    "h-12 rounded-lg animate-pulse bg-muted/50",
+                    idx % 2 === 0 ? "w-3/4 mr-auto" : "w-3/4 ml-auto"
+                  )}
+                />
+              ))}
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center space-y-2 text-muted-foreground p-4">
+              <MessageSquare className="w-12 h-12 opacity-20" />
+              <p className="text-sm">No messages yet.</p>
+              <p className="text-xs opacity-70">Be the first to say hello!</p>
+            </div>
+          ) : (
+            messages.map((msg, index) => {
+              const isMe = msg.profile_id === profile?.id;
+              const showHeader =
+                index === 0 ||
+                messages[index - 1].username !== msg.username ||
+                new Date(msg.created_at).getTime() -
+                  new Date(messages[index - 1].created_at).getTime() >
+                  60000;
+
+              return (
                 <div
                   key={msg.id}
-                  className="text-[#DDD9C7] text-sm py-2 px-2 border-l-2 border-[#7ACD54] bg-[#0f1017] rounded hover:bg-[#16171f] transition-colors"
+                  className={cn(
+                    "flex flex-col max-w-[85%]",
+                    isMe ? "ml-auto items-end" : "mr-auto items-start"
+                  )}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-[#7ACD54] text-xs">
+                  {showHeader && (
+                    <span className="text-[10px] text-muted-foreground mb-1 px-1">
                       {msg.username}
                     </span>
-                    <span className="text-[#7ACD54]/50 text-xs">
-                      {new Date(msg.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+                  )}
+                  <div
+                    className={cn(
+                      "px-3 py-2 rounded-2xl text-sm wrap-break-word shadow-sm",
+                      isMe
+                        ? "bg-primary text-primary-foreground rounded-tr-none"
+                        : "bg-muted text-foreground rounded-tl-none"
+                    )}
+                  >
+                    {msg.text}
                   </div>
-                  <div className="break-words">{msg.text}</div>
+                  <span className="text-[9px] text-muted-foreground/50 mt-1 px-1">
+                    {new Date(msg.created_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
                 </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col items-center py-4 gap-4">
+          <div className="relative">
+            <Users className="w-5 h-5 text-muted-foreground" />
+            <span className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-[10px] px-1 rounded-full">
+              {onlineCount}
+            </span>
           </div>
+        </div>
+      )}
 
-          {authenticated ? (
-            <div className="flex gap-2 mt-auto">
-              <input
-                type="text"
+      {/* Input Area */}
+      {!toggleChat && (
+        <div className="p-3 border-t border-border/40 bg-background/50 shrink-0">
+          {canChat ? (
+            <div className="flex w-full gap-2">
+              <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Type a message..."
-                disabled={!isConnected}
-                className="flex-1 bg-[#0f1017] border border-[#7ACD54]/30 rounded px-3 py-2 text-[#DDD9C7] text-sm placeholder-[#7ACD54]/50 focus:outline-none focus:border-[#7ACD54] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onKeyDown={handleKeyPress}
+                placeholder="Type..."
+                disabled={!isConnected || isSending}
+                className="flex-1 bg-background border-border/50 focus-visible:ring-primary/50 h-9"
               />
               <Button
+                size="icon"
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim() || !isConnected}
-                className="bg-[#7ACD54] hover:bg-[#6ab844] text-[#1a1b24] font-semibold px-3 py-2 h-auto rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!inputValue.trim() || !isConnected || isSending}
+                className={cn(
+                  "shrink-0 h-9 w-9 transition-all",
+                  isSending && "opacity-70"
+                )}
               >
-                <Send size={18} />
+                {isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
               </Button>
             </div>
           ) : (
-            <div className="text-center text-[#7ACD54]/70 text-sm">
-              Please connect Wallet to continue chat
+            <div className="w-full text-center py-2">
+              <p className="text-xs text-muted-foreground">
+                {authenticated ? "Set username to chat" : "Connect wallet"}
+              </p>
             </div>
           )}
         </div>
       )}
-      <div className="">
-        <MessagesSquare
-          size={24}
-          color="black"
-          onClick={() => settoggleChat(toggleChat ? false : true)}
-          className="bg-[#7ACD54] m-2 h-8 w-8 p-1 rounded-xl mt-3 cursor-pointer"
-        />
-      </div>
     </div>
   );
 }

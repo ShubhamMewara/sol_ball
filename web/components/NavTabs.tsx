@@ -4,18 +4,37 @@ import { playHapticFeedback } from "./home-page";
 import { Button } from "./ui/button";
 import { Logo } from "./logo";
 import { usePrivy } from "@privy-io/react-auth";
-import { useState } from "react";
-import DepositModal from "./deposit-model";
-import WithdrawModal from "./withdraw-model";
+import { useMemo, useState } from "react";
+import WalletModal from "./wallet-modal";
+import { useAuth } from "@/store/auth";
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 export const NavTabs = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { authenticated, user, login } = usePrivy();
-  const [isDepositOpen, setIsDepositOpen] = useState(false);
-  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const { balance = 0 } = useAuth();
+  const [walletDialog, setWalletDialog] = useState<{
+    open: boolean;
+    tab: "deposit" | "withdraw";
+  }>({
+    open: false,
+    tab: "deposit",
+  });
   const shortAddress = (addr?: string) =>
     addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : "";
+  const formattedBalance = useMemo(
+    () => ((balance ?? 0) / LAMPORTS_PER_SOL).toFixed(4),
+    [balance]
+  );
+
+  const openWalletModal = (tab: "deposit" | "withdraw") => {
+    if (!authenticated) {
+      login({ loginMethods: ["wallet"] });
+      return;
+    }
+    setWalletDialog({ open: true, tab });
+  };
 
   return (
     <div className="flex items-center justify-between pt-8 pb-8 px-4">
@@ -67,28 +86,32 @@ export const NavTabs = () => {
       {/* Wallet actions (replaces decorative circle) */}
       <div className="flex items-center gap-3">
         {authenticated && (
-          <>
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 shadow-lg shadow-black/20">
+            <div className="flex items-center gap-2 border-r border-white/10 pr-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-white/60">
+                Balance
+              </span>
+              <span className="text-sm font-semibold text-white">
+                {formattedBalance} SOL
+              </span>
+            </div>
             <Button
-              onClick={() =>
-                authenticated
-                  ? setIsWithdrawOpen(true)
-                  : login({ loginMethods: ["wallet"] })
-              }
-              className="px-5 py-2.5 rounded-full font-bold text-sm tracking-wider bg-[#2a2b34] text-[#DDD9C7] shadow-[2px_2px_0_0_#fffff] hover:bg-[#343541] transition-colors"
+              size="sm"
+              variant={"secondary"}
+              onClick={() => openWalletModal("deposit")}
+              className="rounded-full bg-emerald-500/20 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-emerald-200 transition hover:bg-emerald-400/30"
             >
-              WITHDRAW
+              Deposit
             </Button>
             <Button
-              onClick={() =>
-                authenticated
-                  ? setIsDepositOpen(true)
-                  : login({ loginMethods: ["wallet"] })
-              }
-              className="px-5 py-2.5 rounded-full font-bold text-sm tracking-wider bg-[#7ACD54] text-white hover:bg-[#6ab844] transition-colors shadow-[2px_2px_0_0_#65ab44]"
+              size="sm"
+              variant={"secondary"}
+              onClick={() => openWalletModal("withdraw")}
+              className="rounded-full bg-rose-500/20 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-rose-200 transition hover:bg-rose-400/30"
             >
-              DEPOSIT
+              Withdraw
             </Button>
-          </>
+          </div>
         )}
         <Button
           onClick={() =>
@@ -101,13 +124,10 @@ export const NavTabs = () => {
         </Button>
       </div>
       {/* <Logo username="Jacked Nerd" height={150} width={150} /> */}
-      <DepositModal
-        isOpen={isDepositOpen}
-        onClose={() => setIsDepositOpen(false)}
-      />
-      <WithdrawModal
-        isOpen={isWithdrawOpen}
-        onClose={() => setIsWithdrawOpen(false)}
+      <WalletModal
+        isOpen={walletDialog.open}
+        initialTab={walletDialog.tab}
+        onClose={() => setWalletDialog((prev) => ({ ...prev, open: false }))}
       />
     </div>
   );

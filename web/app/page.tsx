@@ -1,7 +1,7 @@
-import MainTab from "@/components/main-tab";
+import HomePage from "@/components/home-page";
 
 const Page = () => {
-  return <MainTab />;
+  return <HomePage />;
 };
 
 export default Page;
