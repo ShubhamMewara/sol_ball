@@ -9,7 +9,7 @@ import IDL from "@/compiled/solball.json";
 
 const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
   const { ready, authenticated, user } = usePrivy();
-  const { setBalance, setConnection, connection, setUser } = useAuth();
+  const { setBalance, setConnection, connection, setProfile } = useAuth();
 
   useEffect(() => {
     if (!ready || !authenticated) return;
@@ -41,11 +41,7 @@ const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("wallet_key", user?.wallet?.address!)
         .single();
       if (data) {
-        setUser({
-          avatar_url: data.avatar_url,
-          username: data.username,
-          wallet_key: data.wallet_key,
-        });
+        setProfile(data);
       }
       if (error) toast("Error updating profile");
     };
@@ -69,6 +65,10 @@ const ProfileProvider = ({ children }: { children: React.ReactNode }) => {
     getProfile();
   }, [ready, authenticated]);
 
+  if (!ready) {
+    return null;
+  }
+  
   return <>{children}</>;
 };
 

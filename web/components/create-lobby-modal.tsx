@@ -1,23 +1,21 @@
 "use client";
-import { useState } from "react";
-import { toast } from "sonner";
-import { slugify } from "@/lib/utils";
-import { useRouter } from "next/navigation";
-import { usePrivy } from "@privy-io/react-auth";
-import { createLobby } from "@/lib/lobbies";
 import LobbyWaitingModal from "@/components/lobby-room";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { createLobby } from "@/lib/lobbies";
+import { slugify } from "@/lib/utils";
+import { usePrivy } from "@privy-io/react-auth";
 import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export default function CreateLobbyModal() {
-  const router = useRouter();
   const { authenticated, user, login } = usePrivy();
   const [prizePot, setPrizePot] = useState(0.001);
   const [players, setPlayers] = useState(3);

@@ -68,22 +68,15 @@ export function useOnlineGame(
 
     socket.addEventListener("open", () => {
       const o = optsRef.current;
+      if (!o.playerKey || !o) return;
       // If a team is provided we are joining as a player; otherwise auto-join and let server assign team
       if (o.joinTeam) {
+        console.log("Joining team:", o.joinTeam, o.playerKey);
         socket.send(
           JSON.stringify({
             type: "join",
             name: "player",
             team: o.joinTeam,
-            teamSize: o.teamSize,
-            playerKey: o.playerKey,
-          })
-        );
-      } else {
-        socket.send(
-          JSON.stringify({
-            type: "join",
-            name: "player",
             teamSize: o.teamSize,
             playerKey: o.playerKey,
           })
@@ -300,7 +293,11 @@ export function useOnlineGame(
           ctx.font = "bold 12px sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          const jersey = (pb as any).num ?? (pa as any).num ?? ((Math.abs([...id].reduce((aa, c) => aa + c.charCodeAt(0), 0)) % 9) + 1);
+          const jersey =
+            (pb as any).num ??
+            (pa as any).num ??
+            (Math.abs([...id].reduce((aa, c) => aa + c.charCodeAt(0), 0)) % 9) +
+              1;
           ctx.fillText(String(jersey), px * SCALE, py * SCALE);
         });
         drawn = true;
@@ -401,9 +398,7 @@ export function useOnlineGame(
     if (!s) return;
     const o = optsRef.current;
     if (o.claimHostWallet) {
-      s.send(
-        JSON.stringify({ type: "claim-host", wallet: o.claimHostWallet })
-      );
+      s.send(JSON.stringify({ type: "claim-host", wallet: o.claimHostWallet }));
     }
     if (o.startOnConnect && !startSentRef.current) {
       s.send(

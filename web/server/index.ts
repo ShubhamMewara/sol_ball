@@ -7,6 +7,19 @@ import { createWalls, createWorld } from "./game/world";
 import { kick } from "./game/kick";
 import type { Connection, ConnectionContext } from "partyserver";
 import { routePartykitRequest, Server } from "partyserver";
+import {
+  ClientClaimHostSchema,
+  ClientInputsSchema,
+  ClientJoinSchema,
+  ClientSpectateSchema,
+  ClientStartSchema,
+} from "../lib/schemas";
+// Timings and phases
+const MAX_TICK_MS = 100;
+const BROADCAST_INTERVAL_MS = 33; // ~30Hz
+const CELEBRATION_MS = 3000;
+type Phase = "waiting" | "playing" | "celebrating" | "ended";
+
 export class Globe extends Server {
   // Let's use hibernation mode so we can scale to thousands of connections
   static options = { hibernate: true };
@@ -20,9 +33,9 @@ export class Globe extends Server {
   ball: planck.Body;
   score = { red: 0, blue: 0 };
   private lastTickMs = Date.now();
-  private physicsAccumMs = 0;
-  private broadcastAccumMs = 0;
-  private phase: "waiting" | "playing" | "celebrating" | "ended" = "waiting";
+  private physicsMs = 0;
+  private broadcastMs = 0;
+  private phase: Phase = "waiting";
   private hostConnId: string | null = null;
   private hostWallet?: string;
   private endAtMs: number | null = null;
@@ -60,19 +73,19 @@ export class Globe extends Server {
 
   private stepAndMaybeBroadcast(deltaMs: number) {
     // Clamp to avoid spiral of death on stalls
-    if (deltaMs > 100) deltaMs = 100;
+    if (deltaMs > MAX_TICK_MS) deltaMs = MAX_TICK_MS;
     const now = Date.now();
 
     if (this.phase === "playing") {
       // Fixed-step physics at CONFIG.timeStep using an accumulator
-      this.physicsAccumMs += deltaMs;
+      this.physicsMs += deltaMs;
       const stepMs = CONFIG.timeStep * 1000; // fixed physics step duration in ms
-      while (this.physicsAccumMs >= stepMs) {
+      while (this.physicsMs >= stepMs) {
         this.world.step(CONFIG.timeStep);
         // Make ball follow the pushing player's movement like real football
         this.applyDribbleInteraction();
         this.enforceBallTouchlineWalls();
-        this.physicsAccumMs -= stepMs;
+        this.physicsMs -= stepMs;
       }
       this.detectGoals();
       // Match timer
@@ -112,21 +125,21 @@ export class Globe extends Server {
         this.lastGoalTeam = null;
 
         // Kick off an immediate broadcast to reflect reset
-        this.broadcastAccumMs = 0;
+        this.broadcastMs = 0;
         this.broadcastSnapshot();
       } else {
-        this.physicsAccumMs = 0; // frozen
+        this.physicsMs = 0; // frozen
       }
     } else {
       // Not playing; don't let accumulator grow unbounded
-      this.physicsAccumMs = 0;
+      this.physicsMs = 0;
     }
 
     // Broadcast snapshots at ~30 Hz
-    this.broadcastAccumMs += deltaMs;
-    if (this.broadcastAccumMs >= 33) {
+    this.broadcastMs += deltaMs;
+    if (this.broadcastMs >= BROADCAST_INTERVAL_MS) {
       this.broadcastSnapshot();
-      this.broadcastAccumMs = 0;
+      this.broadcastMs = 0;
     }
   }
 
@@ -150,8 +163,11 @@ export class Globe extends Server {
 
   onMessage(conn: Connection, message: any) {
     try {
-      const msg = JSON.parse(String(message));
-      if (msg.type === "join") {
+      const raw = JSON.parse(String(message)); 
+      if (raw?.type === "join") {
+        const parsed = ClientJoinSchema.safeParse(raw); 
+        if (!parsed.success) return;
+        const msg = parsed.data;
         // Optionally receive team and teamSize
         const preferred: "red" | "blue" | undefined = msg.team;
         const teamSize = Number(msg.teamSize);
@@ -201,7 +217,9 @@ export class Globe extends Server {
         this.maybeStart();
         return;
       }
-      if (msg.type === "spectate") {
+      if (raw?.type === "spectate") {
+        const ok = ClientSpectateSchema.safeParse(raw);
+        if (!ok.success) return;
         // Convert this connection to spectator: remove any player body and team mapping
         const b = this.players.get(conn.id);
         if (b) {
@@ -212,19 +230,28 @@ export class Globe extends Server {
         this.spectators.add(conn.id);
         return;
       }
-      if (msg.type === "claim-host") {
+      if (raw?.type === "claim-host") {
+        const parsed = ClientClaimHostSchema.safeParse(raw);
+        if (!parsed.success) return;
+        const msg = parsed.data;
         // Allow a wallet to claim host if not set yet
         if (!this.hostWallet) {
           this.hostWallet = String(msg.wallet || "");
         }
-      } else if (msg.type === "start") {
+      } else if (raw?.type === "start") {
+        const parsed = ClientStartSchema.safeParse(raw);
+        if (!parsed.success) return;
+        const msg = parsed.data;
         // Only host can start
         const isHost =
           (this.hostWallet && msg.wallet && this.hostWallet === msg.wallet) ||
           (!this.hostWallet && this.hostConnId === conn.id);
         if (!isHost) return;
         this.requestStart(Number(msg.durationMin) || this.matchDurationMin);
-      } else if (msg.type === "inputs") {
+      } else if (raw?.type === "inputs") {
+        const parsed = ClientInputsSchema.safeParse(raw);
+        if (!parsed.success) return;
+        const msg = parsed.data;
         const keys = msg.keys || {};
         const actor = this.players.get(conn.id);
         // Only apply movement/kick while playing; still advance timers/broadcast below
@@ -351,8 +378,7 @@ export class Globe extends Server {
   private startCelebration() {
     // Enter a short celebration phase before resetting positions
     this.phase = "celebrating";
-    const CELEB_MS = 3000; // increased celebration time
-    this.celebrationEndAtMs = Date.now() + CELEB_MS;
+    this.celebrationEndAtMs = Date.now() + CELEBRATION_MS;
   }
 
   // Prevent the ball from crossing the white touchline rectangle while allowing it
@@ -538,8 +564,8 @@ export class Globe extends Server {
     this.endAtMs = Date.now() + Math.max(1, durationMin) * 60 * 1000;
     // Reset timers/accumulators and send an immediate snapshot
     this.lastTickMs = Date.now();
-    this.physicsAccumMs = 0;
-    this.broadcastAccumMs = 0;
+    this.physicsMs = 0;
+    this.broadcastMs = 0;
     this.broadcastSnapshot();
     this.endWebhookSent = false;
 

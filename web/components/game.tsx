@@ -15,7 +15,6 @@ export default function PlanckGame({ room }: { room?: string }) {
   function OnlineGame() {
     const { user } = usePrivy();
     const wallet = user?.wallet?.address || undefined;
-    const userId = user?.id || wallet; // fallback if needed
 
     const [opts, setOpts] = useState<{
       claimHostWallet?: string;
@@ -25,6 +24,7 @@ export default function PlanckGame({ room }: { room?: string }) {
       teamSize?: number;
       playerKey?: string;
     }>({});
+    console.log("Game options:", opts);
 
     useEffect(() => {
       let cancel = false;
@@ -39,8 +39,8 @@ export default function PlanckGame({ room }: { room?: string }) {
 
           // Fetch my membership to determine team
           let myTeam: "red" | "blue" | undefined = undefined;
-          if (userId) {
-            const membership = await getLobbyMembership(lobby.id, userId);
+          if (wallet) {
+            const membership = await getLobbyMembership(lobby.id, wallet);
             if (membership?.team === "red" || membership?.team === "blue")
               myTeam = membership.team;
           }
@@ -56,7 +56,7 @@ export default function PlanckGame({ room }: { room?: string }) {
             durationMin: lobby.match_minutes ?? 3,
             joinTeam: myTeam,
             teamSize: lobby.players ?? undefined,
-            playerKey: wallet || userId,
+            playerKey: wallet,
           } as const;
           if (!cancel) setOpts(next);
         } catch {
@@ -66,7 +66,7 @@ export default function PlanckGame({ room }: { room?: string }) {
       return () => {
         cancel = true;
       };
-    }, [room, userId, wallet]);
+    }, [room, wallet]);
 
     useOnlineGame(canvasRef, room || "default", opts);
     return null;

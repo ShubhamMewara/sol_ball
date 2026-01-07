@@ -74,10 +74,12 @@ export default function RootLayout({
       <body className={dynapuff.className}>
         <PrivvyProvider>
           <ProfileProvider>
-            <NavTabs />
-            {children}
-            <Toaster />
-            <WelcomeAlert />
+            <main>
+              <NavTabs />
+              {children}
+              <Toaster />
+              <WelcomeAlert />
+            </main>
           </ProfileProvider>
         </PrivvyProvider>
       </body>

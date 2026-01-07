@@ -10,6 +10,7 @@ export default function PrivvyProviderWrapper({
 }) {
   return (
     <PrivyProvider
+      children={children}
       appId="cmgy56w8c00m7ie0b754duzgh"
       config={{
         appearance: {
@@ -44,8 +45,6 @@ export default function PrivvyProviderWrapper({
           },
         },
       }}
-    >
-      {children}
-    </PrivyProvider>
+    />
   );
 }

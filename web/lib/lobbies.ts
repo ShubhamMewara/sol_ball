@@ -62,18 +62,17 @@ export async function getLobbyMembers(lobby_id: string) {
   return data as { user_id: string; team: "red" | "blue" }[];
 }
 
-export async function getLobbyMembership(
-  lobby_id: string,
-  user_id: string
-) {
+export async function getLobbyMembership(lobby_id: string, user_id: string) {
   const { data, error } = await supabase
     .from("lobby_members")
-    .select("user_id, team, lobby_room_id")
+    .select("*")
     .eq("lobby_room_id", lobby_id)
     .eq("user_id", user_id)
     .maybeSingle();
-  if (error) throw error;
-  return (data as { user_id: string; team: "red" | "blue"; lobby_room_id: string } | null);
+  if (error) {
+    console.error("getLobbyMembership error", { lobby_id, user_id, error });
+  }
+  return data;
 }
 
 export async function startLobby(room_id: string) {

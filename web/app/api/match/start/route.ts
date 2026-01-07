@@ -10,6 +10,8 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import IDL from "@/compiled/solball.json";
+import { MatchStartBody } from "@/lib/schemas";
+import { parseJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -21,13 +23,9 @@ function toLamports(sol: number): number {
 export async function POST(req: NextRequest) {
   console.log("Starting match...");
   try {
-    const { roomId } = await req.json();
-    if (!roomId || typeof roomId !== "string") {
-      return NextResponse.json(
-        { error: "roomId is required" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseJson(req, MatchStartBody);
+    if ("error" in parsed) return parsed.error;
+    const { roomId } = parsed.data;
 
     const supabase = createAdminClient();
 
@@ -120,14 +118,7 @@ export async function POST(req: NextRequest) {
 
     const bx = await connection.getLatestBlockhash();
     if (!ix.programId) {
-      return NextResponse.json(
-        {
-          error: "❌ programId missing from instruction",
-        },
-        {
-          status: 400,
-        }
-      );
+      return NextResponse.json({ error: "programId missing" }, { status: 400 });
     }
 
     const tx = new Transaction({
@@ -168,12 +159,8 @@ export async function POST(req: NextRequest) {
     } else {
       console.log("❌ Transaction failed:", txSig.value.err);
       return NextResponse.json(
-        {
-          error: txSig.value.err,
-        },
-        {
-          status: 400,
-        }
+        { error: txSig.value.err },
+        { status: 400 }
       );
     }
   } catch (e: any) {

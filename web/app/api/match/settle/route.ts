@@ -10,6 +10,8 @@ import {
   Transaction,
 } from "@solana/web3.js";
 import IDL from "@/compiled/solball.json";
+import { MatchSettleBody } from "@/lib/schemas";
+import { parseJson } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -20,19 +22,9 @@ function toLamports(sol: number): number {
 export async function POST(req: NextRequest) {
   console.log("Settling match...");
   try {
-    const { roomId, winner } = await req.json();
-    if (!roomId || typeof roomId !== "string") {
-      return NextResponse.json(
-        { error: "roomId is required" },
-        { status: 400 }
-      );
-    }
-    if (winner !== "red" && winner !== "blue") {
-      return NextResponse.json(
-        { error: "winner must be 'red' or 'blue'" },
-        { status: 400 }
-      );
-    }
+    const parsed = await parseJson(req, MatchSettleBody);
+    if ("error" in parsed) return parsed.error;
+    const { roomId, winner } = parsed.data;
 
     const supabase = createAdminClient();
 
@@ -148,7 +140,7 @@ export async function POST(req: NextRequest) {
       .instruction();
 
     const bx = await connection.getLatestBlockhash();
-    if (!ix.programId) throw new Error("❌ programId missing from instruction");
+    if (!ix.programId) throw new Error("programId missing");
 
     const tx = new Transaction({
       feePayer: new PublicKey(selectedWallet.publicKey!),

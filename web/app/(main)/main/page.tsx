@@ -1,21 +1,14 @@
 "use client";
-import ChatSidebar from "@/components/chat-sidebar";
 import CreateLobbyModal from "@/components/create-lobby-modal";
 import GameCard from "@/components/game-card";
 import { EmptyLobbyState } from "@/components/lobby-empty-state";
-import { Button } from "@/components/ui/button";
 import { getLobbies } from "@/lib/lobbies";
-import { useAuth } from "@/store/auth";
 import { supabase } from "@/supabase/client";
 import { Tables } from "@/supabase/database.types";
-import { usePrivy } from "@privy-io/react-auth";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { useEffect, useState } from "react";
 
 const Page = () => {
   const [lobbies, setLobbies] = useState<Tables<"lobbies">[]>([]);
-  const { balance } = useAuth();
-  const { authenticated } = usePrivy();
 
   useEffect(() => {
     let mounted = true;
@@ -75,16 +68,8 @@ const Page = () => {
   return (
     <div className="px-6 pb-8">
       <div className="relative flex flex-col gap-6 lg:flex-row">
-        <ChatSidebar />
         <main className="flex-1">
-          <div className="flex flex-wrap justify-between items-center gap-4 mb-2">
-            {authenticated && (
-              <Button variant={"outline"}>
-                {balance
-                  ? (balance / LAMPORTS_PER_SOL).toFixed(4) + "SOL"
-                  : "0 SOL"}
-              </Button>
-            )}
+          <div className="flex flex-wrap justify-end items-center gap-4 mb-2">
             <CreateLobbyModal />
           </div>
           {lobbies.length > 0 ? (
