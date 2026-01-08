@@ -40,6 +40,7 @@ export function useOnlineGame(
   const bufferDelayMs = 120;
   const optsRef = useRef<StartOptions>(opts);
   const startSentRef = useRef<boolean>(false);
+  const joinSentRef = useRef<boolean>(false);
   useEffect(() => {
     optsRef.current = opts;
   }, [opts]);
@@ -70,7 +71,7 @@ export function useOnlineGame(
       const o = optsRef.current;
       if (!o.playerKey || !o) return;
       // If a team is provided we are joining as a player; otherwise auto-join and let server assign team
-      if (o.joinTeam) {
+      if (o.joinTeam && !joinSentRef.current) {
         console.log("Joining team:", o.joinTeam, o.playerKey);
         socket.send(
           JSON.stringify({
@@ -81,6 +82,7 @@ export function useOnlineGame(
             playerKey: o.playerKey,
           })
         );
+        joinSentRef.current = true;
       }
       // Attempt to claim host if requested
       if (o.claimHostWallet) {
@@ -92,7 +94,7 @@ export function useOnlineGame(
         );
       }
       // Optionally start match immediately (host only; server enforces)
-      if (o.startOnConnect) {
+      if (o.startOnConnect && !startSentRef.current) {
         socket.send(
           JSON.stringify({
             type: "start",
@@ -100,6 +102,7 @@ export function useOnlineGame(
             wallet: o.claimHostWallet,
           })
         );
+        startSentRef.current = true;
       }
     });
 
@@ -145,6 +148,17 @@ export function useOnlineGame(
           }
           if ((s as any).winner) {
             useGameStore.setState({ winnerTeam: (s as any).winner });
+          }
+          // Calculate ping/latency from snapshot timestamp (half RTT approximation)
+          if (typeof s.t === "number") {
+            const rawPing = Math.max(0, (Date.now() - s.t) / 2);
+            const currentPing = useGameStore.getState().pingMs;
+            // Exponential moving average for smooth display
+            const smoothedPing =
+              currentPing !== undefined
+                ? Math.round(currentPing * 0.8 + rawPing * 0.2)
+                : Math.round(rawPing);
+            useGameStore.setState({ pingMs: smoothedPing });
           }
         }
       } catch {
@@ -389,14 +403,31 @@ export function useOnlineGame(
       window.removeEventListener("keyup", onKeyUp);
       snapshotsRef.current = [];
       meRef.current = null;
+      // Reset sent flags for potential remount
+      joinSentRef.current = false;
+      startSentRef.current = false;
     };
   }, [canvasRef, roomName]);
 
-  // Late start: if options arrive after socket is open, send claim-host/start once
+  // Late start: if options arrive after socket is open, send join/claim-host/start
   useEffect(() => {
     const s = socketRef.current;
     if (!s) return;
     const o = optsRef.current;
+    // Send join message when playerKey arrives late (only if not already sent)
+    if (o.playerKey && o.joinTeam && !joinSentRef.current) {
+      console.log("Late join:", o.joinTeam, o.playerKey);
+      s.send(
+        JSON.stringify({
+          type: "join",
+          name: "player",
+          team: o.joinTeam,
+          teamSize: o.teamSize,
+          playerKey: o.playerKey,
+        })
+      );
+      joinSentRef.current = true;
+    }
     if (o.claimHostWallet) {
       s.send(JSON.stringify({ type: "claim-host", wallet: o.claimHostWallet }));
     }
@@ -410,7 +441,14 @@ export function useOnlineGame(
       );
       startSentRef.current = true;
     }
-  }, [opts.claimHostWallet, opts.startOnConnect, opts.durationMin]);
+  }, [
+    opts.claimHostWallet,
+    opts.startOnConnect,
+    opts.durationMin,
+    opts.playerKey,
+    opts.joinTeam,
+    opts.teamSize,
+  ]);
 
   // API to trigger start from UI
   const startMatch = (durationMin?: number) => {

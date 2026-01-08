@@ -20,6 +20,7 @@ export type GameState = {
   winnerTeam?: "red" | "blue" | "draw" | null;
   celebrateMsLeft?: number;
   lastGoalTeam?: "red" | "blue" | null;
+  pingMs?: number;
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -50,4 +51,5 @@ export const useGameStore = create<GameState>((set, get) => ({
   winnerTeam: null,
   celebrateMsLeft: 0,
   lastGoalTeam: null,
+  pingMs: undefined,
 }));

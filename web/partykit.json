@@ -1,5 +1,5 @@
 {
   "name": "solball",
   "main": "server/index.ts",
-  "compatibilityDate": "2024-10-01"
+  "compatibilityDate": "2024-12-01"
 }
