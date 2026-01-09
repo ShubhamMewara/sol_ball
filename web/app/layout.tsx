@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import PrivvyProvider from "../providers/PrivyProvider";
-import { DynaPuff } from "next/font/google";
+import { DynaPuff, Orbitron } from "next/font/google";
 import { NavTabs } from "@/components/NavTabs";
 import ProfileProvider from "@/providers/ProfileProvider";
 import { Toaster } from "sonner";
 import { WelcomeAlert } from "@/components/welcome-alert";
 
-const dynapuff = DynaPuff({
+const dynapuff = Orbitron({
   subsets: ["latin"], // adjust subsets if needed
   variable: "--font-dynapuff",
   display: "swap",

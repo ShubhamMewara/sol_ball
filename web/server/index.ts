@@ -1,4 +1,3 @@
-// migrated from "partykit/server" to "partyserver"; room is untyped to avoid depending on PartyKit types
 import planck from "planck-js";
 import { createBall } from "./game/ball";
 import { CONFIG, SCALE } from "./game/constants";
@@ -163,9 +162,9 @@ export class Globe extends Server {
 
   onMessage(conn: Connection, message: any) {
     try {
-      const raw = JSON.parse(String(message)); 
+      const raw = JSON.parse(String(message));
       if (raw?.type === "join") {
-        const parsed = ClientJoinSchema.safeParse(raw); 
+        const parsed = ClientJoinSchema.safeParse(raw);
         if (!parsed.success) return;
         const msg = parsed.data;
         // Optionally receive team and teamSize
@@ -585,6 +584,12 @@ export class Globe extends Server {
   }
 
   private assignTeam(id: string, preferred?: "red" | "blue"): "red" | "blue" {
+    // IMPORTANT: Check if this player already has a team assigned - never re-assign during a match
+    const existingTeam = this.teamByPlayer.get(id);
+    if (existingTeam) {
+      return existingTeam;
+    }
+
     const redCount = this.countTeam("red");
     const blueCount = this.countTeam("blue");
     // Respect capacity
@@ -607,9 +612,19 @@ export class Globe extends Server {
   }
 
   private countTeam(team: "red" | "blue") {
+    // Count all players assigned to this team from the teamByPlayer map
+    // This counts by playerKey to be consistent with team assignments
     let n = 0;
-    for (const [cid, pk] of this.connToPlayer) {
-      if (this.teamByPlayer.get(pk) === team) n++;
+    for (const [playerKey, assignedTeam] of this.teamByPlayer) {
+      if (assignedTeam === team) {
+        // Only count if this player is still connected (has an active connection)
+        for (const [_, pk] of this.connToPlayer) {
+          if (pk === playerKey) {
+            n++;
+            break;
+          }
+        }
+      }
     }
     return n;
   }

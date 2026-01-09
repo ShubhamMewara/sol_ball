@@ -105,17 +105,20 @@ export default function PlanckGame({ room }: { room?: string }) {
 
       {/* Footer status */}
       <footer className="w-full border-t border-emerald-700/30 bg-emerald-950/30">
-        <div className="mx-auto max-w-6xl px-4 py-2 text-sm text-emerald-200/80 flex items-center gap-3">
-          <span
-            className={`h-2 w-2 rounded-full ${
-              phase === "playing"
-                ? "bg-emerald-400 shadow-[0_0_10px_2px_rgba(52,211,153,0.6)]"
-                : phase === "ended"
-                ? "bg-rose-400 shadow-[0_0_10px_2px_rgba(251,113,133,0.5)]"
-                : "bg-amber-300 shadow-[0_0_10px_2px_rgba(252,211,77,0.4)]"
-            }`}
-          />
-          <span className="capitalize">{phase}</span>
+        <div className="mx-auto max-w-6xl px-4 py-2 text-sm text-emerald-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                phase === "playing"
+                  ? "bg-emerald-400 shadow-[0_0_10px_2px_rgba(52,211,153,0.6)]"
+                  : phase === "ended"
+                  ? "bg-rose-400 shadow-[0_0_10px_2px_rgba(251,113,133,0.5)]"
+                  : "bg-amber-300 shadow-[0_0_10px_2px_rgba(252,211,77,0.4)]"
+              }`}
+            />
+            <span className="capitalize">{phase}</span>
+          </div>
+          <PingIndicator />
         </div>
       </footer>
     </div>
@@ -248,6 +251,36 @@ function ControlsHint() {
       </span>
       <span className="rounded-md bg-emerald-950/50 px-2 py-1 opacity-80">
         Have fun!
+      </span>
+    </div>
+  );
+}
+
+function PingIndicator() {
+  const pingMs = useGameStore((s) => s.pingMs);
+
+  // Color coding based on latency
+  const getColor = () => {
+    if (pingMs === undefined) return "text-emerald-200/60";
+    if (pingMs < 50) return "text-emerald-400"; // Excellent
+    if (pingMs < 100) return "text-amber-400"; // Good
+    return "text-rose-400"; // Poor
+  };
+
+  const getIndicatorColor = () => {
+    if (pingMs === undefined) return "bg-emerald-200/40";
+    if (pingMs < 50)
+      return "bg-emerald-400 shadow-[0_0_6px_1px_rgba(52,211,153,0.5)]";
+    if (pingMs < 100)
+      return "bg-amber-400 shadow-[0_0_6px_1px_rgba(251,191,36,0.5)]";
+    return "bg-rose-400 shadow-[0_0_6px_1px_rgba(251,113,133,0.5)]";
+  };
+
+  return (
+    <div className="flex items-center gap-2 text-xs font-medium">
+      <span className={`h-1.5 w-1.5 rounded-full ${getIndicatorColor()}`} />
+      <span className={getColor()}>
+        {pingMs !== undefined ? `${pingMs}ms` : "---"}
       </span>
     </div>
   );

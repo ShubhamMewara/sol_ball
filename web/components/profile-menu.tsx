@@ -3,19 +3,19 @@
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
 import { supabase } from "@/supabase/client";
-import { usePrivy } from "@privy-io/react-auth";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { useLogin, usePrivy, useSigners } from "@privy-io/react-auth";
 import {
   Camera,
   Check,
   Coins,
   Copy,
   LogOut,
+  RefreshCw,
   Trash,
   User,
   Wallet,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -31,13 +31,71 @@ export function ProfilePage() {
     tab: "deposit",
   });
   const [userName, setuserName] = useState<string | null>(null);
-  const { authenticated, user, ready, login, logout } = usePrivy();
-  const { balance, setProfile, profile } = useAuth();
+  const { authenticated, user, ready, logout } = usePrivy();
+  const { addSigners } = useSigners();
+
+  const login = useLogin({
+    onComplete: async ({ isNewUser, user }) => {
+      if (isNewUser) {
+        await addSigners({
+          address: user.wallet?.address!,
+          signers: [
+            {
+              signerId: "gtxlu2vw9ef8hnepnby6gtr4",
+              // Replace the empty `policyIds` array with an array of valid policy IDs if you'd like the signer to only be able to execute certain transaction requests allowed by a policy
+              policyIds: [],
+            },
+          ],
+        });
+      }
+    },
+    onError: () => {
+      toast("Something went wrong;");
+    },
+  });
+  const { balance, setProfile, profile, setBalance } = useAuth();
   const [preview, setPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [isAvatarUploading, setisAvatarUploading] = useState(false);
   const [isSettingUsername, setisSettingUsername] = useState(false);
+  const [embeddedWallet, setEmbeddedWallet] = useState<string | null>(null);
+  const [embeddedWalletID, setEmbeddedWalletID] = useState<string | null>(null);
+  const [loadingEmbeddedWallet, setLoadingEmbeddedWallet] = useState(false);
+
   const [copied, setCopied] = useState(false);
+
+  const getProfile = async () => {
+    setBalance(null);
+    const { data: profile_data, error } = await supabase
+      .from("profile")
+      .select("*")
+      .eq("wallet_key", user?.wallet?.address!)
+      .single();
+    if (profile_data) {
+      setProfile(profile_data);
+    }
+    if (error) toast("Error updating profile");
+    const walletId = profile_data?.embedded_wallet_address;
+    console.log("walletId:", walletId);
+    if (!profile_data?.embedded_wallet_address) {
+      setBalance(0);
+      return;
+    }
+    const ACTIVE_CHAIN = "solana_devnet";
+    const res = await fetch(
+      `/api/privy/wallet-balance?address=${walletId}&asset=sol&chain=${ACTIVE_CHAIN}`
+    );
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch balance");
+    }
+
+    const data = await res.json();
+
+    const solanaBalance = data.balances[0].display_values.sol;
+
+    setBalance(solanaBalance);
+  };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,6 +194,47 @@ export function ProfilePage() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  const ensureEmbeddedWallet = async () => {
+    if (!user?.id || !user?.wallet?.address) return;
+
+    setLoadingEmbeddedWallet(true);
+
+    try {
+      const res = await fetch("/api/privy/ensure-embedded-wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          privyUserId: user.id,
+          phantomAddress: user.wallet.address,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to ensure embedded wallet");
+      }
+
+      setEmbeddedWallet(data.embeddedWalletAddress);
+      setEmbeddedWalletID(data.embedded_wallet_id);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to initialize game wallet");
+    } finally {
+      setLoadingEmbeddedWallet(false);
+    }
+  };
+
+  useEffect(() => {
+    if (ready && authenticated && user?.id && user?.wallet?.address) {
+      ensureEmbeddedWallet();
+    }
+  }, [ready, authenticated, user?.id, user?.wallet?.address]);
+
+  if (loadingEmbeddedWallet) {
+    return <span>Initializing game wallet...</span>;
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-8 px-6 pb-12 max-w-[1600px] mx-auto w-full">
@@ -290,7 +389,7 @@ export function ProfilePage() {
             ) : !authenticated ? (
               <Button
                 className="w-full bg-[#7ACD54] text-[#14151C] py-6 text-lg font-bold hover:bg-[#6ab844] shadow-[0_0_20px_-5px_#7ACD54]"
-                onClick={() => login({ loginMethods: ["wallet"] })}
+                onClick={() => login.login({ loginMethods: ["wallet"] })}
               >
                 <Wallet className="mr-2" />
                 Connect Wallet
@@ -303,10 +402,18 @@ export function ProfilePage() {
                     Total Balance
                   </span>
                   <div className="text-4xl font-bold text-white flex items-baseline gap-1">
-                    {balance
-                      ? (balance / LAMPORTS_PER_SOL).toFixed(4)
-                      : "0.0000"}
+                    {balance ?? (
+                      <span className="animate-spin inline-block h-6 w-6 rounded-full border-2 border-white border-t-transparent" />
+                    )}
                     <span className="text-lg text-[#7ACD54]">SOL</span>
+                    <div
+                      className="ml-4"
+                      onClick={async () => {
+                        await getProfile();
+                      }}
+                    >
+                      <RefreshCw size={17} className="cursor-pointer" />
+                    </div>
                   </div>
                 </div>
 
@@ -344,7 +451,7 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <CardContent className="p-8 flex flex-col h-full opacity-50 pointer-events-none select-none filter blur-[2px]">
+        <CardContent className="p-8 flex flex-col h-full  pointer-events-none select-none filter blur-[2px]">
           <div className="flex items-center justify-center mb-8">
             <h2 className="text-white font-bold text-2xl tracking-tight flex items-center gap-2">
               <Coins className="w-6 h-6 text-[#7ACD54]" />
@@ -420,6 +527,7 @@ export function ProfilePage() {
       </Card>
 
       <WalletModal
+        embeddedWalletAddress={embeddedWallet}
         isOpen={walletDialog.open}
         initialTab={walletDialog.tab}
         onClose={() => setWalletDialog((prev) => ({ ...prev, open: false }))}
