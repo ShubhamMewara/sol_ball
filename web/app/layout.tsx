@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "https://rotaidwsuspvtajitelz.supabase.co/storage/v1/object/public/solball/logo.png",
+        url: "metadata-preview-solball.png",
         width: 1200,
         height: 630,
         alt: "Sol Ball Game Preview",
@@ -53,9 +53,7 @@ export const metadata: Metadata = {
     title: "Sol Ball ⚽ – Real-Time Football Game on Solana",
     description:
       "Compete in 3v3 football matches, deposit SOL, and earn on-chain rewards. Built with Privy & Solana for seamless Web3 gameplay.",
-    images: [
-      "https://rotaidwsuspvtajitelz.supabase.co/storage/v1/object/public/solball/logo.png",
-    ],
+    images: ["metadata-preview-solball.png"],
     creator: "@piyushhsainii | @shubhamewara",
   },
   robots: {
