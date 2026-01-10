@@ -49,7 +49,7 @@ export const CONFIG: GameConfig = {
   ballRadiusPx: Math.round(BASE_BALL_RADIUS_PX * SIZE_SCALE),
   goalHeightPx: Math.round(BASE_GOAL_HEIGHT_PX * SIZE_SCALE),
   // Simulation parameters
-  moveSpeed: 3.2, // meters/sec (kept constant when scaling size)
+  moveSpeed: 5, // meters/sec (kept constant when scaling size)
   timeStep: 1 / 60,
   playerAccelMps2: BASE_PLAYER_ACCEL_MPS2 * SIZE_SCALE, // scale with size
   // Visual/field layout

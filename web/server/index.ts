@@ -364,12 +364,14 @@ export class Globe extends Server {
     const rightLine = W - (pitchInsetPx as number); // x-position of right white line
     const eps = 0.5; // small tolerance in pixels
     if (xpx + r <= leftLine - eps) {
-      this.score.red += 1; // ball fully crossed into LEFT goal, red scores
-      this.lastGoalTeam = "red";
+      // Ball crossed into LEFT goal (Red's side) = Blue scores
+      this.score.blue += 1;
+      this.lastGoalTeam = "blue";
       this.startCelebration();
     } else if (xpx - r >= rightLine + eps) {
-      this.score.blue += 1; // ball fully crossed into RIGHT goal, blue scores
-      this.lastGoalTeam = "blue";
+      // Ball crossed into RIGHT goal (Blue's side) = Red scores
+      this.score.red += 1;
+      this.lastGoalTeam = "red";
       this.startCelebration();
     }
   }
