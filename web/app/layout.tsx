@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import PrivvyProvider from "../providers/PrivyProvider";
-import { DynaPuff } from "next/font/google";
+import { DynaPuff, Orbitron } from "next/font/google";
 import { NavTabs } from "@/components/NavTabs";
 import ProfileProvider from "@/providers/ProfileProvider";
 import { Toaster } from "sonner";
 import { WelcomeAlert } from "@/components/welcome-alert";
 
-const dynapuff = DynaPuff({
+const dynapuff = Orbitron({
   subsets: ["latin"], // adjust subsets if needed
   variable: "--font-dynapuff",
   display: "swap",
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "https://rotaidwsuspvtajitelz.supabase.co/storage/v1/object/public/solball/logo.png",
+        url: "metadata-preview-solball.png",
         width: 1200,
         height: 630,
         alt: "Sol Ball Game Preview",
@@ -53,9 +53,7 @@ export const metadata: Metadata = {
     title: "Sol Ball ⚽ – Real-Time Football Game on Solana",
     description:
       "Compete in 3v3 football matches, deposit SOL, and earn on-chain rewards. Built with Privy & Solana for seamless Web3 gameplay.",
-    images: [
-      "https://rotaidwsuspvtajitelz.supabase.co/storage/v1/object/public/solball/logo.png",
-    ],
+    images: ["metadata-preview-solball.png"],
     creator: "@piyushhsainii | @shubhamewara",
   },
   robots: {

@@ -250,9 +250,9 @@ export default function LobbyWaitingModal({
         </div>
 
         {/* Teams Section */}
-        <div className="flex gap-8 mb-8">
+        <div className="flex gap-8 justify-evenly mb-8 ">
           {/* Red Team */}
-          <div className="flex-1">
+          <div className="flex-1 max-w-[40%] w-full">
             <button
               onClick={() => handleTeamSelect("red")}
               disabled={redTeam.length >= maxPlayersPerTeam}
@@ -270,21 +270,25 @@ export default function LobbyWaitingModal({
             </button>
 
             {/* Red Team Players */}
-            <div className="space-y-3">
+            <div className="space-y-3 ">
               {redSlots.map((_, idx) => {
                 const player = redTeam[idx];
                 return (
                   <div
                     key={idx}
-                    className={`bg-[#2a2b34] rounded-lg py-3 px-4 text-center font-bold transition-all ${
+                    className={`bg-[#2a2b34] rounded-lg py-3 px-4 font-sans text-center font-bold transition-all truncate  ${
                       player
                         ? "text-[#DDD9C7] border-2 border-[#FF6B6B]/30"
                         : "text-[#2a2b34] border-2 border-transparent"
                     }`}
                   >
                     {player ? (
-                      <span>
-                        {player.name} {player.isCurrentUser && "(YOU)"}
+                      <span className="">
+                        {/* {player.name.length > 6
+                          ? player.name.slice(0, 6) + "....."
+                          : player.name} */}
+                        {player.name}
+                        {player.isCurrentUser && "(YOU)"}
                       </span>
                     ) : (
                       "Empty"
@@ -301,7 +305,7 @@ export default function LobbyWaitingModal({
           </div>
 
           {/* Blue Team */}
-          <div className="flex-1">
+          <div className="flex-1 max-w-[40%] w-full">
             <button
               onClick={() => handleTeamSelect("blue")}
               disabled={blueTeam.length >= maxPlayersPerTeam}
@@ -319,13 +323,13 @@ export default function LobbyWaitingModal({
             </button>
 
             {/* Blue Team Players */}
-            <div className="space-y-3">
+            <div className="space-y-3 w-full">
               {blueSlots.map((_, idx) => {
                 const player = blueTeam[idx];
                 return (
                   <div
                     key={idx}
-                    className={`bg-[#2a2b34] rounded-lg py-3 px-4 text-center font-bold transition-all ${
+                    className={`bg-[#2a2b34] rounded-lg py-3 px-4 text-center font-bold transition-all   truncate ${
                       player
                         ? "text-[#DDD9C7] border-2 border-[#4FC3F7]/30"
                         : "text-[#2a2b34] border-2 border-transparent"

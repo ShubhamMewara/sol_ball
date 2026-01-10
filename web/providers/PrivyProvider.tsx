@@ -2,6 +2,7 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
+import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
 export default function PrivvyProviderWrapper({
   children,
@@ -27,6 +28,22 @@ export default function PrivvyProviderWrapper({
             "okx_wallet",
           ],
         },
+        solana: {
+          rpcs: {
+            "solana:mainnet": {
+              rpc: createSolanaRpc("https://api.devnet.solana.com"),
+              rpcSubscriptions: createSolanaRpcSubscriptions(
+                "wss://api.devnet.solana.com"
+              ),
+            },
+            "solana:devnet": {
+              rpc: createSolanaRpc("https://api.devnet.solana.com"),
+              rpcSubscriptions: createSolanaRpcSubscriptions(
+                "wss://api.devnet.solana.com"
+              ),
+            },
+          },
+        },
         externalWallets: {
           solana: {
             connectors: toSolanaWalletConnectors(),
@@ -41,7 +58,7 @@ export default function PrivvyProviderWrapper({
             createOnLogin: "off",
           },
           solana: {
-            createOnLogin: "off",
+            createOnLogin: "all-users",
           },
         },
       }}

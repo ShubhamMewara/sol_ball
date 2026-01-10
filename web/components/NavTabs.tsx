@@ -23,10 +23,7 @@ export const NavTabs = () => {
   });
   const shortAddress = (addr?: string) =>
     addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : "";
-  const formattedBalance = useMemo(
-    () => ((balance ?? 0) / LAMPORTS_PER_SOL).toFixed(4),
-    [balance]
-  );
+  const formattedBalance = useMemo(() => balance ?? 0, [balance]);
 
   const openWalletModal = (tab: "deposit" | "withdraw") => {
     if (!authenticated) {
@@ -37,7 +34,11 @@ export const NavTabs = () => {
   };
 
   return (
-    <div className="flex items-center justify-between pt-8 pb-8 px-4">
+    <div
+      className={`flex items-center justify-between pt-8 pb-8 px-4 ${
+        pathname === "/" && "hidden"
+      }`}
+    >
       <Logo />
       {pathname !== "/" && (
         <div className="flex gap-6">
@@ -99,7 +100,7 @@ export const NavTabs = () => {
               size="sm"
               variant={"secondary"}
               onClick={() => openWalletModal("deposit")}
-              className="rounded-full bg-emerald-500/20 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-emerald-200 transition hover:bg-emerald-400/30"
+              className="rounded-full bg-[#7ACD54] px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-black transition hover:bg-emerald-400/30"
             >
               Deposit
             </Button>
@@ -125,6 +126,7 @@ export const NavTabs = () => {
       </div>
       {/* <Logo username="Jacked Nerd" height={150} width={150} /> */}
       <WalletModal
+        embeddedWalletAddress={null}
         isOpen={walletDialog.open}
         initialTab={walletDialog.tab}
         onClose={() => setWalletDialog((prev) => ({ ...prev, open: false }))}

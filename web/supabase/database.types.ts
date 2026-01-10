@@ -126,6 +126,8 @@ export type Database = {
           avatar_url: string | null
           balance_lamports: number
           created_at: string
+          embedded_wallet_address: string | null
+          embedded_wallet_id: string | null
           id: string
           username: string | null
           wallet_key: string
@@ -134,6 +136,8 @@ export type Database = {
           avatar_url?: string | null
           balance_lamports?: number
           created_at?: string
+          embedded_wallet_address?: string | null
+          embedded_wallet_id?: string | null
           id?: string
           username?: string | null
           wallet_key: string
@@ -142,6 +146,8 @@ export type Database = {
           avatar_url?: string | null
           balance_lamports?: number
           created_at?: string
+          embedded_wallet_address?: string | null
+          embedded_wallet_id?: string | null
           id?: string
           username?: string | null
           wallet_key?: string
