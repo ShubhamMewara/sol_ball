@@ -41,13 +41,26 @@ export function ProfilePage() {
           address: user.wallet?.address!,
           signers: [
             {
-              signerId: "gtxlu2vw9ef8hnepnby6gtr4",
+              signerId: "dek7v9jfahc9h3z7ewku5bte",
+              // signerId: "hfnio0o11oi95pw2bts3tgac",
               // Replace the empty `policyIds` array with an array of valid policy IDs if you'd like the signer to only be able to execute certain transaction requests allowed by a policy
               policyIds: [],
             },
           ],
         });
+        toast("Profile Setup Successfull");
       }
+      await addSigners({
+        address: user.wallet?.address!,
+        signers: [
+          {
+            signerId: "dek7v9jfahc9h3z7ewku5bte",
+            // signerId: "hfnio0o11oi95pw2bts3tgac",
+            // Replace the empty `policyIds` array with an array of valid policy IDs if you'd like the signer to only be able to execute certain transaction requests allowed by a policy
+            policyIds: [],
+          },
+        ],
+      });
     },
     onError: () => {
       toast("Something went wrong;");

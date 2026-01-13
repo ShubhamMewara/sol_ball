@@ -157,7 +157,6 @@ export default function ImprovedWithdraw() {
       );
 
       setStatus("Waiting for approval...");
-
       // This will show Privy's UI and handle the signing
       const signature = await signAndSendTransaction({
         transaction,
